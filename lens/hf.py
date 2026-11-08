@@ -218,13 +218,29 @@ class DeepModel:
         import torch
         return ("full", input_ids if prior is None else torch.cat([prior, input_ids], dim=1), seen)
 
+    END_TOKENS = ("<|im_end|>", "<|endoftext|>", "<|eot_id|>", "<|end|>", "<end_of_turn>", "<|end_of_text|>",
+                  "<|im_sep|>", "</s>", "<|return|>", "<|end_of_turn|>", "<|eom_id|>")
+
     def _stop_ids(self) -> tuple:
-        ids = []
-        for token in ("<|im_end|>", "<|endoftext|>", "<|eot_id|>"):
-            tid = self.tokenizer.convert_tokens_to_ids(token)
-            if isinstance(tid, int) and tid >= 0 and tid != self.tokenizer.unk_token_id:
-                ids.append(tid)
-        return tuple(ids)
+        """End-of-turn tokens: the model's own declared ones (generation_config) plus the common chat end markers.
+        Phi-3 ends with <|end|> and Gemma with <end_of_turn>; missing one makes deep mode run past the answer."""
+        cached = getattr(self, "_stop_cache", None)
+        if cached is not None:
+            return cached
+        ids = set()
+        declared = getattr(getattr(self.model, "generation_config", None), "eos_token_id", None)
+        for tid in (declared if isinstance(declared, (list, tuple)) else [declared]):
+            if isinstance(tid, int) and tid >= 0:
+                ids.add(tid)
+        for token in self.END_TOKENS:
+            try:
+                tid = self.tokenizer.convert_tokens_to_ids(token)
+            except Exception:
+                continue
+            if isinstance(tid, int) and tid >= 0 and tid != getattr(self.tokenizer, "unk_token_id", None):
+                ids.add(tid)
+        self._stop_cache = tuple(sorted(ids))
+        return self._stop_cache
 
     def _piece(self, token_id: int) -> str:
         """Text this token adds to the answer. Decoding tokens one at a time drops the leading space that SentencePiece

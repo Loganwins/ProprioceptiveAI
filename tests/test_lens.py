@@ -382,3 +382,24 @@ class StreamDecodeTest(unittest.TestCase):
         ids = tok.encode(text, add_special_tokens=False)
         m = self.make(tok)
         self.assertEqual("".join(m._piece(i) for i in ids).strip(), text)
+
+
+class StopTokenTest(unittest.TestCase):
+    """Deep mode stops at the model's own end-of-turn token (Phi-3 <|end|>, Gemma <end_of_turn>), not just a fixed list."""
+
+    def test_declared_and_common_end_tokens(self):
+        from lens.hf import DeepModel
+        m = DeepModel.__new__(DeepModel)
+
+        class Cfg:
+            eos_token_id = [7, 9]
+
+        class Model:
+            generation_config = Cfg()
+
+        class Tok:
+            unk_token_id = 0
+            def convert_tokens_to_ids(self, t):
+                return {"<|end|>": 32007, "<end_of_turn>": 107}.get(t, 0)
+        m.model, m.tokenizer = Model(), Tok()
+        self.assertEqual(set(m._stop_ids()), {7, 9, 32007, 107})

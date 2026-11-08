@@ -1,11 +1,12 @@
 # Models with Behaviour packs
 
-Behaviour packs are available for **120 models**. Every model also gets confidence, hesitations, memory and deep view; this list is only for the optional Behaviour panel.
+Behaviour packs are available for **124 models**. Every model also gets confidence, hesitations, memory and deep view; this list is only for the optional Behaviour panel.
 
 | Hugging Face model (`lens --deep …`) | Ollama name | Behaviours |
 |---|---|---|
 | `01-ai/Yi-1.5-6B-Chat` | `yi:6b` | code/prose, assertive/hedged, repeating itself |
 | `01-ai/Yi-6B-Chat` | — | repeating itself |
+| `aisingapore/Gemma-SEA-LION-v3-9B-IT` | — | code/prose, assertive/hedged, repeating itself |
 | `allenai/OLMo-2-0425-1B-Instruct` | `olmo2:1b` | code/prose, following instructions, repeating itself |
 | `allenai/OLMo-2-1124-7B-Instruct` | `olmo2:7b` | assertive/hedged |
 | `allenai/Olmo-3-7B-Instruct` | — | assertive/hedged, following instructions |
@@ -31,7 +32,9 @@ Behaviour packs are available for **120 models**. Every model also gets confiden
 | `ibm-granite/granite-3.1-1b-a400m-instruct` | `granite3.1-moe:1b` | assertive/hedged, following instructions, repeating itself |
 | `ibm-granite/granite-3.1-2b-instruct` | `granite3.1-dense:2b` | assertive/hedged, following instructions, repeating itself |
 | `ibm-granite/granite-3.1-3b-a800m-instruct` | `granite3.1-moe:3b` | code/prose, assertive/hedged, following instructions, repeating itself |
+| `ibm-granite/granite-3.1-8b-instruct` | `granite3.1-dense:8b` | code/prose, following instructions, repeating itself |
 | `ibm-granite/granite-3.2-2b-instruct` | `granite3.2:2b` | assertive/hedged, following instructions, repeating itself |
+| `ibm-granite/granite-3.2-8b-instruct` | `granite3.2:8b` | code/prose, assertive/hedged, following instructions, repeating itself |
 | `ibm-granite/granite-3.3-2b-instruct` | `granite3.3:2b` | code/prose, assertive/hedged, repeating itself |
 | `ibm-granite/granite-3.3-8b-instruct` | `granite3.3:8b` | code/prose, assertive/hedged, following instructions, repeating itself |
 | `ibm-granite/granite-4.0-1b` | — | code/prose, assertive/hedged, repeating itself |
@@ -101,6 +104,7 @@ Behaviour packs are available for **120 models**. Every model also gets confiden
 | `stabilityai/stable-code-instruct-3b` | — | code/prose, repeating itself |
 | `stabilityai/stablelm-2-zephyr-1_6b` | — | following instructions, repeating itself |
 | `stabilityai/stablelm-zephyr-3b` | `stablelm-zephyr:3b` | assertive/hedged, following instructions |
+| `swiss-ai/Apertus-8B-Instruct-2509` | — | following instructions, repeating itself |
 | `swiss-ai/Apertus-v1.1-0.5B-Instruct` | — | assertive/hedged |
 | `swiss-ai/Apertus-v1.1-1.5B-Instruct` | — | code/prose |
 | `swiss-ai/Apertus-v1.1-4B-Instruct` | — | code/prose, assertive/hedged, following instructions |

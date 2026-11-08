@@ -85,7 +85,7 @@ and **Before / after** re-runs your question without steering so you can see exa
   Sliders stop at the strongest setting that passed.
 - On the most popular models, long answers are checked too: a direction that makes 300-word answers more repetitive
   is capped or withdrawn. Elsewhere, sliders stay at the gentlest strength that passed until that check has run.
-- **New: Answer in French** (Qwen2.5 3B, app 0.1.9+). Steers the model's internal state toward French with no
+- **New: Answer in French** (Qwen2.5 3B, app 0.1.10+). Steers the model's internal state toward French with no
   instruction in your prompt. In testing, 8 plain English questions went from 8% to 99% French at one step of the
   slider, while a random push of the same size stayed at 1–2%.
 - Nothing steers automatically. You choose, and you can always compare against the unsteered answer.
