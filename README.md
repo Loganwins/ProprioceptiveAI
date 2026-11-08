@@ -18,6 +18,8 @@
   register, following your instructions, creative or literal, assertive or hedged, repeating itself, asking or stating.
   These probes were validated on the original model, then transferred to each supported model. There they were
   re-tested against length and random-direction controls, and with a live test on the model's own answers.
+  Two-sided bars (formal ↔ casual, code ↔ prose, …) are centred between that model's own two extremes. A bar is shown
+  only where the model separates them reliably, so some models show fewer bars rather than misleading ones.
 - **Terminal mode and an API** for wiring Lens into your own stack.
 - **Private.** Everything runs locally. Behaviour is opt-in and sends only 16–32 scrambled numbers per word (16 per probe layer), never your text.
 
