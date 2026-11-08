@@ -54,7 +54,9 @@ class Cloud:
             raise CloudError(f"Proprioceptive Cloud unreachable ({exc})") from None
 
     def enable(self) -> dict:
-        data = self._call("POST", "/v1/lens/devices", {"client": f"lens/{__version__}"})
+        import os                                  # LENS_CLIENT_TAG=internal marks test runs (excluded from user counts)
+        tag = os.environ.get("LENS_CLIENT_TAG", "").strip()
+        data = self._call("POST", "/v1/lens/devices", {"client": f"lens/{__version__}" + (f" {tag}" if tag else "")})
         self.creds = {"url": self.url, "device_id": data["device_id"], "token": data["token"]}
         self.creds_path.parent.mkdir(parents=True, exist_ok=True)
         self.creds_path.write_text(json.dumps(self.creds))
