@@ -17,11 +17,15 @@ def main(argv=None) -> int:
     if argv and argv[0] in ("term", "terminal"):
         from .terminal import main as terminal_main
         return terminal_main(argv[1:])
+    if argv and argv[0] == "install":
+        from .desktop import install_launcher
+        print(f"Added Proprioceptive Lens to your apps: {install_launcher()}")
+        return 0
     if argv and argv[0] == "mcp":
         from .mcp import main as mcp_main
         return mcp_main(argv[1:])
     parser = argparse.ArgumentParser(prog="lens", description="Proprioceptive Lens — see inside your local model. "
-                                     "Run `lens term` for Proprioceptive Terminal Mode, `lens mcp` for the MCP server.")
+                                     "Run `lens term` for Proprioceptive Terminal Mode, `lens mcp` for the MCP server, `lens install` to add it to your apps.")
     parser.add_argument("--port", type=int, default=int(os.environ.get("LENS_PORT", 7777)))
     parser.add_argument("--ollama", default=os.environ.get("OLLAMA_HOST", "http://127.0.0.1:11434"),
                         help="Ollama URL (default http://127.0.0.1:11434)")
@@ -32,7 +36,8 @@ def main(argv=None) -> int:
                         help="Hugging Face model to run in deep mode, e.g. Qwen/Qwen2.5-3B-Instruct "
                              "(needs: pip install proprioceptive-lens[deep])")
     parser.add_argument("--cloud", default=os.environ.get("LENS_CLOUD_URL"), help=argparse.SUPPRESS)
-    parser.add_argument("--no-browser", action="store_true")
+    parser.add_argument("--no-browser", action="store_true", help="don't open a window")
+    parser.add_argument("--tab", action="store_true", help="open in a browser tab instead of an app window")
     parser.add_argument("--version", action="version", version=f"lens {__version__}")
     args = parser.parse_args(argv)
     ollama = args.ollama if args.ollama.startswith("http") else "http://" + args.ollama
@@ -44,6 +49,19 @@ def main(argv=None) -> int:
     try:
         serve(app, args.port)
     except OSError as exc:
+        url = f"http://127.0.0.1:{args.port}/"
+        try:                                    # already running (e.g. launcher clicked twice): just show it
+            import json
+            import urllib.request
+            with urllib.request.urlopen(url + "api/status", timeout=3) as r:
+                if json.load(r).get("app") == "proprioceptive-lens":
+                    print(f"Lens is already running at {url}")
+                    if not args.no_browser:
+                        from .desktop import open_window
+                        webbrowser.open(url) if args.tab else open_window(url, Path(args.data))
+                    return 0
+        except Exception:
+            pass
         print(f"Could not start on port {args.port}: {exc}", file=sys.stderr)
         return 1
     url = f"http://127.0.0.1:{args.port}/"
@@ -53,7 +71,12 @@ def main(argv=None) -> int:
           f"{len(status['models'])} models · memory: {status['memory_count']} saved")
     print(f"  Use it from other apps: OpenAI-compatible endpoint {url}v1 (adds memory to any chat app)")
     if not args.no_browser:
-        webbrowser.open(url)
+        if args.tab:
+            webbrowser.open(url)
+        else:
+            from .desktop import open_window
+            if open_window(url, Path(args.data)) == "window":
+                print("  Opened in its own window (use --tab for a browser tab). Add it to your apps: lens install")
     try:
         while True:
             time.sleep(3600)

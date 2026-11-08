@@ -27,6 +27,9 @@ ollama pull qwen3:4b                 # any chat model works
 lens                                 # opens the app in your browser
 ```
 
+Lens opens in its own app window (using Chrome, Edge, Chromium or Brave if you have one; otherwise your browser).
+Add it to your apps menu with `lens install`; use `lens --tab` for a normal browser tab.
+
 Options: `lens --port 7777 --ollama http://127.0.0.1:11434 --hindsight http://localhost:8888`.
 
 ## Deep mode and Behaviour
