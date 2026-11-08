@@ -61,9 +61,11 @@ and **Before / after** re-runs your question without steering so you can see exa
 
 **Truth check** (Deluxe). A local reader model reads factual claims, including claims from Claude or any
 other assistant, and Proprioceptive AI's internal-state probe returns a fabrication-risk reading for each:
-low, elevated or high. Validated on factual relations: who wrote what, capitals, landmarks, currencies, discoveries,
-chemical symbols. "High" flags about 57% of false claims with about 2.5% false alarms; "elevated" about 69% with
-about 10%. It doesn't handle numbers or dates. It's a reading, not a verdict. Your claims are read on your computer.
+low, elevated or high. It catches **blatant mismatches** in factual relations: who wrote what, capitals, landmarks, currencies,
+discoveries, chemical symbols. On claims where an unrelated real answer was swapped in, "high" flagged about 57% with
+about 2.5% false alarms. It does **not** catch plausible-sounding errors (for example a neighbouring country's currency,
+or a common misconception), and it doesn't handle numbers or dates. Treat "low" as "no red flag", never as
+confirmation. Your claims are read on your computer.
 Available in the app API (`/api/claims`) and to Claude through `lens mcp` (`check_claims`).
 
 Start the 7-day free trial from the Steer panel; no card is needed. Enter your email, then paste the activation token

@@ -291,4 +291,4 @@ class ClaimToolTest(unittest.TestCase):
         text = out["content"][0]["text"]
         self.assertIn("[HIGH    ] The capital of Australia is Sydney.", text)
         self.assertIn("[LOW     ] Paris is in France.", text)
-        self.assertIn("A reading, not a verdict", text)
+        self.assertIn("not confirmation", text)

@@ -40,7 +40,7 @@ TOOLS = [
      "description": "Truth check (Lens Deluxe): a local reader model reads each factual claim and Proprioceptive AI's "
                     "internal-state probe returns a fabrication-risk reading (low / elevated / high). Validated for "
                     "factual relations: who/what/where (capitals, authors, discoveries, landmarks, currencies, symbols). "
-                    "NOT for numbers or dates. Use it on claims from your own answer before presenting them as fact; "
+                    "Catches blatant mismatches, NOT plausible-sounding errors; NOT for numbers or dates. Use it on claims from your own answer before presenting them as fact; "
                     "pass one claim per item.",
      "inputSchema": {"type": "object", "properties": {
          "claims": {"type": "array", "items": {"type": "string"}, "description": "One factual claim per item."},
@@ -133,7 +133,8 @@ class Server:
             ops = result.get("operating_points") or {}
             lines += ["", "Scope: " + (result.get("scope") or ""),
                       f"Calibration: 'high' flags ~{round(100 * ops.get('high', 0))}% of false relation claims with ~2.5% "
-                      f"false alarms; 'elevated' ~{round(100 * ops.get('elevated', 0))}% with ~10%. A reading, not a verdict."]
+                      f"false alarms; 'elevated' ~{round(100 * ops.get('elevated', 0))}% with ~10%. It catches blatant mismatches, "
+                      "not plausible-sounding errors or misconceptions: 'low' is not confirmation."]
             return {"content": [{"type": "text", "text": "\n".join(lines)}], "structuredContent": result}
         if name == "search_memory":
             rows = self.app.memory.recall(str(args.get("query", "")), limit=int(args.get("limit", 5)))

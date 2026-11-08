@@ -17,7 +17,8 @@ Tools:
 - `check_claims` (Lens Deluxe): pass factual claims, one per item. You might take them from your own answer before
   stating them as fact. Each gets a fabrication-risk band from a local reader model's internal state. It works for
   factual relations (who/what/where); it does NOT check numbers or dates. Treat "high" as "verify before stating"
-  and "low" as "no internal red flag", not as proof. A known miss: popular misconceptions can read as low.
+  and "low" as "no internal red flag", never as proof. It catches blatant mismatches (an unrelated answer swapped in),
+  NOT plausible-sounding errors or common misconceptions. So a "low" reading does not make a claim true.
 
 ## How to read the result
 
