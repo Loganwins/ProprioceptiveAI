@@ -86,6 +86,28 @@ class DeepModel:
                     break
             return encode(rest)
 
+    def read(self, text: str, max_tokens: int = 128) -> dict:
+        """Read a piece of text (no generation, no chat template) and return this device's projections of the
+        mean hidden state over its tokens: {"sigma": {key: [16]}, "norm": {key: float}}. Used by claim checks,
+        which were validated on mean-pooled reading of plain statements."""
+        torch = self.torch
+        ids = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=max_tokens)["input_ids"].to(self.device)
+        layers = sorted({self._layer_of(k) for k in self.projections})
+        captured = {}
+        handles = [self.layers[L].register_forward_hook(
+            (lambda L: lambda _m, _i, out: captured.__setitem__(L, (out[0] if isinstance(out, tuple) else out)[0].float()))(L))
+            for L in layers]
+        with self.lock:
+            try:
+                with torch.no_grad():
+                    self.model(input_ids=ids)
+            finally:
+                for h in handles:
+                    h.remove()
+        means = {L: captured[L].mean(0) for L in captured}
+        return {"sigma": {k: (M @ means[self._layer_of(k)]).tolist() for k, M in self.projections.items()},
+                "norm": {k: float(means[self._layer_of(k)].norm()) for k in self.projections}}
+
     def set_steering(self, directives: list[dict]) -> None:
         """Steering directives from the cloud: [{"layer": L, "coeffs": [16 floats], "amount": a}, ...].
 

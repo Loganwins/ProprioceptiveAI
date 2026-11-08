@@ -34,6 +34,17 @@ OLLAMA_TO_HF = {
     "falcon3:3b": "tiiuae/Falcon3-3B-Instruct", "falcon3:7b": "tiiuae/Falcon3-7B-Instruct",
     "olmo2:1b": "allenai/OLMo-2-0425-1B-Instruct", "olmo2:7b": "allenai/OLMo-2-1124-7B-Instruct",
     "stablelm-zephyr:3b": "stabilityai/stablelm-zephyr-3b",   # (EXAONE, InternLM2: need bundled model code; not supported)
+    "smollm:135m": "HuggingFaceTB/SmolLM-135M-Instruct", "smollm:360m": "HuggingFaceTB/SmolLM-360M-Instruct",
+    "smollm:1.7b": "HuggingFaceTB/SmolLM-1.7B-Instruct", "smollm2:135m": "HuggingFaceTB/SmolLM2-135M-Instruct",
+    "gemma3:270m": "unsloth/gemma-3-270m-it", "gemma2:9b": "unsloth/gemma-2-9b-it", "gemma:2b": "unsloth/gemma-2b-it",
+    "falcon3:1b": "tiiuae/Falcon3-1B-Instruct", "falcon3:10b": "tiiuae/Falcon3-10B-Instruct",
+    "granite3.2:2b": "ibm-granite/granite-3.2-2b-instruct", "granite3.1-moe:1b": "ibm-granite/granite-3.1-1b-a400m-instruct",
+    "granite3.1-moe:3b": "ibm-granite/granite-3.1-3b-a800m-instruct", "granite3-dense:2b": "ibm-granite/granite-3.0-2b-instruct",
+    "granite3-dense:8b": "ibm-granite/granite-3.0-8b-instruct", "hermes3:3b": "NousResearch/Hermes-3-Llama-3.2-3B",
+    "yi:6b": "01-ai/Yi-1.5-6B-Chat", "yi:9b": "01-ai/Yi-1.5-9B-Chat", "openhermes:7b": "teknium/OpenHermes-2.5-Mistral-7B",
+    "qwen:4b": "Qwen/Qwen1.5-4B-Chat", "qwen:7b": "Qwen/Qwen1.5-7B-Chat", "qwen:14b": "Qwen/Qwen1.5-14B-Chat",
+    "codeqwen:7b": "Qwen/CodeQwen1.5-7B-Chat", "olmo2:13b": "allenai/OLMo-2-1124-13B-Instruct",
+    "glm4:9b": "zai-org/glm-4-9b-chat-hf", "nous-hermes2:10.7b": "NousResearch/Nous-Hermes-2-SOLAR-10.7B",
     "qwen2:1.5b": "Qwen/Qwen2-1.5B-Instruct", "qwen:0.5b": "Qwen/Qwen1.5-0.5B-Chat", "qwen:1.8b": "Qwen/Qwen1.5-1.8B-Chat",
     "zephyr:7b": "HuggingFaceH4/zephyr-7b-beta", "openchat:7b": "openchat/openchat-3.5-1210",
     "solar:10.7b": "upstage/SOLAR-10.7B-Instruct-v1.0", "llama2:7b": "unsloth/llama-2-7b-chat",
@@ -52,7 +63,7 @@ TAGGED = {
 DEFAULT_SIZE = {
     "qwen3": "8b", "qwen2.5": "7b", "qwen2.5-coder": "7b", "qwen2": "7b", "llama3.2": "3b", "llama3.1": "8b", "llama3": "8b",
     "llama2": "7b", "mistral": "7b", "phi3": "3.8b", "phi3.5": "3.8b", "phi4-mini": "3.8b", "deepseek-r1": "8b",
-    "smollm2": "1.7b", "granite3.3": "8b", "falcon3": "7b", "olmo2": "7b", "tinyllama": "1.1b", "zephyr": "7b",
+    "smollm2": "1.7b", "smollm": "1.7b", "yi": "6b", "openhermes": "7b", "glm4": "9b", "codeqwen": "7b", "granite3.3": "8b", "falcon3": "7b", "olmo2": "7b", "tinyllama": "1.1b", "zephyr": "7b",
     "openchat": "7b", "solar": "10.7b", "hermes3": "8b",
 }
 

@@ -36,6 +36,15 @@ TOOLS = [
     {"name": "list_local_models",
      "description": "List the local models Lens can use.",
      "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "check_claims",
+     "description": "Truth check (Lens Deluxe): a local reader model reads each factual claim and Proprioceptive AI's "
+                    "internal-state probe returns a fabrication-risk reading (low / elevated / high). Validated for "
+                    "factual relations: who/what/where (capitals, authors, discoveries, landmarks, currencies, symbols). "
+                    "NOT for numbers or dates. Use it on claims from your own answer before presenting them as fact; "
+                    "pass one claim per item.",
+     "inputSchema": {"type": "object", "properties": {
+         "claims": {"type": "array", "items": {"type": "string"}, "description": "One factual claim per item."},
+         "text": {"type": "string", "description": "Alternatively, prose to split into sentence claims."}}}},
     {"name": "search_memory",
      "description": "Search Lens's private memory of earlier conversations with local models.",
      "inputSchema": {"type": "object", "properties": {
@@ -115,6 +124,17 @@ class Server:
             models = self.app.status()["models"]
             return {"content": [{"type": "text", "text": "\n".join(models) or "No models found (is Ollama running?)"}],
                     "structuredContent": {"models": models}}
+        if name == "check_claims":
+            from .server import split_claims
+            claims = args.get("claims") or split_claims(str(args.get("text", "")))
+            result = self.app.check_claims([str(c) for c in claims])
+            lines = [f"[{(r['band'] or '?').upper():8}] {r['claim']}" + (f"  (risk {r['risk']:+.1f})" if r.get('risk') is not None else "")
+                     for r in result["claims"]]
+            ops = result.get("operating_points") or {}
+            lines += ["", "Scope: " + (result.get("scope") or ""),
+                      f"Calibration: 'high' flags ~{round(100 * ops.get('high', 0))}% of false relation claims with ~2.5% "
+                      f"false alarms; 'elevated' ~{round(100 * ops.get('elevated', 0))}% with ~10%. A reading, not a verdict."]
+            return {"content": [{"type": "text", "text": "\n".join(lines)}], "structuredContent": result}
         if name == "search_memory":
             rows = self.app.memory.recall(str(args.get("query", "")), limit=int(args.get("limit", 5)))
             text = "\n\n".join(f"[{r.get('model', '')}] Q: {r['user']}\nA: {r['assistant']}" for r in rows)

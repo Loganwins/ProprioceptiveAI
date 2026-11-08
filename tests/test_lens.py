@@ -222,6 +222,11 @@ class MCPTest(unittest.TestCase):
             def prepare(self, messages, use_memory):
                 return messages, [], messages[-1]["content"]
 
+            def check_claims(self, claims):
+                return {"claims": [{"claim": c, "risk": 4.0 if "Sydney" in c else 0.2,
+                                    "band": "high" if "Sydney" in c else "low"} for c in claims],
+                        "scope": "Factual relations.", "operating_points": {"high": 0.57, "elevated": 0.69}}
+
             def chat_events(self, model, send, recalled, options=None):
                 yield {"type": "token", "text": "Paris", "p": 0.98, "alternatives": []}
                 yield {"type": "token", "text": " maybe", "p": 0.4, "alternatives": [{"text": " surely", "p": 0.3}]}
@@ -250,7 +255,7 @@ class MCPTest(unittest.TestCase):
         self.assertEqual(len(replies), 6)                     # the notification gets no reply
         self.assertEqual(by_id[1]["result"]["protocolVersion"], "2025-06-18")
         self.assertEqual({t["name"] for t in by_id[2]["result"]["tools"]},
-                         {"ask_local_model", "list_local_models", "search_memory"})
+                         {"ask_local_model", "list_local_models", "search_memory", "check_claims"})
         result = by_id[3]["result"]["structuredContent"]
         self.assertEqual(result["answer"], "Paris maybe")
         self.assertEqual(result["uncertain_words"], 1)
@@ -274,3 +279,16 @@ class InnerStateMemoryTest(unittest.TestCase):
         self.assertEqual([r["id"] for r in got], [a, b])          # nearest first, other spaces never compared
         m.forget(a)
         self.assertEqual([r["id"] for r in m.similar_states("M|dev|1", [0.9, 0.1, 0.1])], [b])
+
+
+class ClaimToolTest(unittest.TestCase):
+    def test_check_claims_tool_and_splitting(self):
+        from lens.server import split_claims
+        self.assertEqual(split_claims("The capital of Australia is Sydney. Paris is in France! Ok?"),
+                         ["The capital of Australia is Sydney.", "Paris is in France!"])   # fragments dropped
+        server = MCPTest().make()
+        out = server.call("check_claims", {"text": "The capital of Australia is Sydney. Paris is in France."})
+        text = out["content"][0]["text"]
+        self.assertIn("[HIGH    ] The capital of Australia is Sydney.", text)
+        self.assertIn("[LOW     ] Paris is in France.", text)
+        self.assertIn("A reading, not a verdict", text)

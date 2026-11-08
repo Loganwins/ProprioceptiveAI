@@ -68,6 +68,20 @@ class Cloud:
         self.config = None
         self.creds_path.unlink(missing_ok=True)
 
+    def fetch_config(self, model_id: str) -> tuple[dict, dict]:
+        """(config, matrices) for a model without touching the chat config (used by the claim reader)."""
+        saved = self.config
+        try:
+            matrices = self.load_config(model_id)
+            return self.config, matrices
+        finally:
+            self.config = saved
+
+    def check_claims(self, config: dict, steps: list[dict]) -> dict:
+        """Deluxe: claim-risk readings for text read by the reader model (one step per claim)."""
+        return self._call("POST", "/v1/lens/claims", {"pack_id": config["pack_id"], "key_version": config["key_version"],
+                                                     "steps": steps}, timeout=30)
+
     def load_config(self, model_id: str) -> dict:
         """Fetch this device's scrambled matrices for a model. Returns {"<layer>" or "p:<layer>": rows}."""
         data = self._call("GET", "/v1/lens/packs/" + urllib.parse.quote(model_id, safe="") + "/config")

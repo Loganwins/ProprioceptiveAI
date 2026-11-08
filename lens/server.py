@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import threading
 import time
 import uuid
@@ -61,6 +62,42 @@ class LensApp:
             self.cloud_error = str(exc)
             self.deep.set_projections({})
             return False
+
+    READER = "Qwen/Qwen2.5-3B-Instruct"     # claim-check reader (validated 2026-11-08; see the README)
+
+    def check_claims(self, claims: list[str]) -> dict:
+        """Truth check (Deluxe): a local reader model reads each claim; only scrambled numbers go to the cloud."""
+        claims = [c.strip() for c in claims if c and c.strip()][:64]
+        if not claims:
+            raise ValueError("no claims given")
+        if not self.cloud.enabled:
+            raise ValueError("turn on Behaviour first (Proprioceptive Cloud), then activate Deluxe")
+        reader = getattr(self, "reader", None)
+        if reader is None:
+            if self.deep is not None and self.deep.model_id == self.READER:
+                reader = self.deep
+            else:
+                if not self.deep_available():
+                    raise ValueError('the claim check needs the deep extra: pip install "proprioceptive-lens[deep]"')
+                from .hf import DeepModel
+                reader = DeepModel(os.environ.get("LENS_READER_PATH", self.READER))   # first use downloads ~6 GB
+            self.reader = reader
+        if getattr(self, "reader_config", None) is None:
+            self.reader_config, matrices = self.cloud.fetch_config(self.READER)
+            if not self.reader_config.get("premium_layers"):
+                self.reader_config = None
+                raise ValueError("the claim check is part of Lens Deluxe (activate it in the Steer panel)")
+            self.reader_projections = matrices
+        saved = reader.projections
+        reader.set_projections(self.reader_projections)
+        try:
+            steps = [reader.read(c) for c in claims]
+        finally:
+            reader.projections = saved
+        result = self.cloud.check_claims(self.reader_config, steps)
+        return {"claims": [{"claim": c, **r} for c, r in zip(claims, result["results"])],
+                "scope": result.get("scope"), "bands": result.get("bands"),
+                "operating_points": result.get("operating_points"), "false_alarm_rates": result.get("false_alarm_rates")}
 
     def apply_steering(self) -> None:
         """Fetch this device's directives for the chosen behaviours and hand them to the deep model."""
@@ -163,6 +200,13 @@ class LensApp:
         else:
             clean[0] = {"role": "system", "content": clean[0]["content"] + ("\n\n" + context if context else "")}
         return clean, recalled, user_text
+
+
+def split_claims(text: str) -> list[str]:
+    """Split prose into sentence-sized claims."""
+    import re
+    parts = re.split(r"(?<=[.!?])\s+(?=[A-Z0-9\"'(])", text.strip())
+    return [p.strip() for p in parts if len(p.strip()) > 3]
 
 
 def _chat_events(self, model: str, send: list[dict], recalled: list[dict], options: dict | None = None):
@@ -311,6 +355,12 @@ def make_handler(app: LensApp, port: int):
                 if app.deep:
                     app.deep.set_projections({})
                 return self._json(200, app.status()["cloud"])
+            if path == "/api/claims":
+                claims = body.get("claims") or split_claims(str(body.get("text", "")))
+                try:
+                    return self._json(200, app.check_claims(claims))
+                except (ValueError, CloudError) as exc:
+                    return self._json(400, {"error": str(exc)})
             if path == "/api/deep/load":
                 try:
                     app.load_deep(str(body.get("model", "")).strip())

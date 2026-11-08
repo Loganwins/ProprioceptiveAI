@@ -14,6 +14,10 @@ Tools:
   (words chosen with low probability and what the model almost said instead) and, in deep mode, **Behaviour**
   readings from the model's internal state.
 - `search_memory`: the user's private history of local-model conversations.
+- `check_claims` (Lens Deluxe): pass factual claims, one per item. You might take them from your own answer before
+  stating them as fact. Each gets a fabrication-risk band from a local reader model's internal state. It works for
+  factual relations (who/what/where); it does NOT check numbers or dates. Treat "high" as "verify before stating"
+  and "low" as "no internal red flag", not as proof. A known miss: popular misconceptions can read as low.
 
 ## How to read the result
 
