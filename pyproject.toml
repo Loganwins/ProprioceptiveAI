@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "proprioceptive-lens"
-version = "0.1.11"
+version = "0.1.12"
 description = "See inside your local model: live confidence, hesitations, long-term memory and internal-state behaviour for local LLMs."
 readme = "README.md"
 requires-python = ">=3.9"

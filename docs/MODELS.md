@@ -1,6 +1,6 @@
 # Models with Behaviour packs
 
-Behaviour packs are available for **124 models**. Every model also gets confidence, hesitations, memory and deep view; this list is only for the optional Behaviour panel.
+Behaviour packs are available for **125 models**. Every model also gets confidence, hesitations, memory and deep view; this list is only for the optional Behaviour panel.
 
 | Hugging Face model (`lens --deep …`) | Ollama name | Behaviours |
 |---|---|---|
@@ -59,6 +59,7 @@ Behaviour packs are available for **124 models**. Every model also gets confiden
 | `LiquidAI/LFM2.5-2.6B` | — | following instructions, repeating itself |
 | `LiquidAI/LFM2.5-230M` | — | assertive/hedged, following instructions |
 | `LiquidAI/LFM2.5-350M` | — | code/prose, assertive/hedged, repeating itself |
+| `llm-jp/llm-jp-4.1-8b-thinking` | — | code/prose, assertive/hedged, following instructions, creative/literal |
 | `microsoft/Phi-3-mini-128k-instruct` | — | code/prose, following instructions |
 | `microsoft/Phi-3-mini-4k-instruct` | `phi3:3.8b` | repeating itself |
 | `microsoft/Phi-3.5-mini-instruct` | `phi3.5:3.8b` | assertive/hedged, repeating itself |

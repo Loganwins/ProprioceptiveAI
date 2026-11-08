@@ -35,6 +35,45 @@ def find_layers(model):
     raise ValueError(f"deep mode does not recognise the layer layout of {type(model).__name__}")
 
 
+def load_tokenizer(source: str):
+    """AutoTokenizer, checked by a decode round-trip. Some repos (DeepSeek Coder 1.3B) declare a byte-level fast tokenizer
+    in tokenizer.json but transformers 5.x loads the slow LlamaTokenizer for them, which drops every word space
+    ("Hello!Icanhelpyou"). When the round-trip loses spaces and a tokenizer.json exists, the fast tokenizer is built from
+    it directly and the chat template and special tokens are carried over."""
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained(source)
+    probe = "Hello! I can help you with tasks."
+    try:
+        ok = tok.decode(tok.encode(probe, add_special_tokens=False)).strip() == probe
+    except Exception:
+        ok = True
+    if ok:
+        return tok
+    tokenizer_json = None
+    for base in ([source] if os.path.isdir(source) else []):
+        cand = os.path.join(base, "tokenizer.json")
+        if os.path.exists(cand):
+            tokenizer_json = cand
+    if tokenizer_json is None:
+        try:
+            from huggingface_hub import hf_hub_download
+            tokenizer_json = hf_hub_download(source, "tokenizer.json")
+        except Exception:
+            return tok
+    from transformers import PreTrainedTokenizerFast
+    fast = PreTrainedTokenizerFast(tokenizer_file=tokenizer_json)
+    for attr in ("chat_template", "eos_token", "bos_token", "pad_token", "unk_token"):
+        value = getattr(tok, attr, None)
+        if value is not None:
+            try:
+                setattr(fast, attr, value)
+            except Exception:
+                pass
+    if fast.decode(fast.encode(probe, add_special_tokens=False)).strip() == probe:
+        return fast
+    return tok
+
+
 class DeepModel:
     def __init__(self, model_id: str, device: str | None = None):
         import torch
@@ -48,7 +87,7 @@ class DeepModel:
         # bf16 everywhere by default: on CPU it measured 2.5x faster than fp32 with half the memory and identical
         # greedy text (Qwen2.5-1.5B), and it matches the GPU precision the probes were validated with.
         dtype = torch.float32 if os.environ.get("LENS_DTYPE", "").lower() in ("float32", "fp32") else torch.bfloat16
-        self.tokenizer = AutoTokenizer.from_pretrained(source)
+        self.tokenizer = load_tokenizer(source)
         try:
             model = AutoModelForCausalLM.from_pretrained(source, dtype=dtype)
         except TypeError:   # transformers < 4.56 uses torch_dtype

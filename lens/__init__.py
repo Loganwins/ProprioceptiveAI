@@ -1,2 +1,2 @@
 """Proprioceptive Lens — see inside your local model."""
-__version__ = "0.1.11"
+__version__ = "0.1.12"

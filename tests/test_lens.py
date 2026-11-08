@@ -437,3 +437,35 @@ class SpelledEndMarkerTest(unittest.TestCase):
         m.tokenizer = Tok()
         m._stream_ids, m._stream_text, m._text_stop = [], "", False
         self.assertEqual("".join(m._piece(i) for i in range(3)), "a < b")
+
+
+class TokenizerRoundTripTest(unittest.TestCase):
+    """A tokenizer that drops word spaces on decode is replaced by the fast one built from tokenizer.json."""
+
+    def test_falls_back_to_fast_tokenizer_when_spaces_are_lost(self):
+        import json, tempfile
+        from pathlib import Path
+        from tokenizers import Tokenizer, models, pre_tokenizers, decoders, trainers
+        d = Path(tempfile.mkdtemp())
+        tk = Tokenizer(models.BPE(unk_token="[UNK]"))
+        tk.pre_tokenizer = pre_tokenizers.ByteLevel(add_prefix_space=False)
+        tk.decoder = decoders.ByteLevel()
+        tk.train_from_iterator(["Hello! I can help you with tasks."] * 50, trainers.BpeTrainer(vocab_size=400, special_tokens=["[UNK]"]))
+        tk.save(str(d / "tokenizer.json"))
+        import lens.hf as hf
+
+        class Lossy:                                   # stands in for the slow tokenizer that loses spaces
+            chat_template = "T"; eos_token = "</s>"; bos_token = None; pad_token = None; unk_token = None
+            def encode(self, s, add_special_tokens=False): return [1, 2]
+            def decode(self, ids): return "Hello!Icanhelpyouwithtasks."
+        import transformers
+        real = transformers.AutoTokenizer.from_pretrained
+        transformers.AutoTokenizer.from_pretrained = staticmethod(lambda *a, **k: Lossy())
+        try:
+            tok = hf.load_tokenizer(str(d))
+        finally:
+            transformers.AutoTokenizer.from_pretrained = real
+        self.assertEqual(type(tok).__name__ != "Lossy", True)
+        self.assertEqual(tok.decode(tok.encode("Hello! I can help you with tasks.", add_special_tokens=False)).strip(),
+                         "Hello! I can help you with tasks.")
+        self.assertEqual(tok.chat_template, "T")
