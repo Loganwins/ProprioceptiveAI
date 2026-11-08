@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "lens": {
+      "command": "lens",
+      "args": ["mcp"]
+    }
+  }
+}

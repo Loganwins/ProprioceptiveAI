@@ -1,0 +1,10 @@
+{
+  "name": "proprioceptive-lens",
+  "version": "0.1.2",
+  "description": "Ask your local models for a second opinion and see how certain they were, word by word: overall certainty, the words they hesitated on and what they almost said. Private memory of past local conversations.",
+  "author": { "name": "Proprioceptive AI" },
+  "homepage": "https://github.com/Loganwins/ProprioceptiveAI",
+  "repository": "https://github.com/Loganwins/ProprioceptiveAI",
+  "license": "MIT",
+  "keywords": ["ollama", "local-llm", "interpretability", "confidence", "mcp"]
+}

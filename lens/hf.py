@@ -1,0 +1,223 @@
+"""Deep mode: run a Hugging Face model locally and read its internal state.
+
+Needs `pip install proprioceptive-lens[deep]` (torch + transformers).
+Per generated token this yields the same events as the Ollama backend plus
+  layers: activity (RMS of the hidden state) for every layer, for the deep view
+  sigma/norm: for opted-in cloud scoring, M_L @ h and |h| at the layers the
+              cloud requested, where M_L is the device's scrambled matrix.
+This module contains no proprietary components: it multiplies hidden states by
+whatever matrix the cloud sent and nothing else.
+"""
+from __future__ import annotations
+
+import threading
+from typing import Iterator
+
+
+# Where decoder blocks live, by architecture family. Covers Llama, Qwen 1-3, Mistral, Mixtral, Gemma 1-3, Phi 1-4,
+# Granite, OLMo, DeepSeek, InternLM, StableLM, Falcon, GPT-2/J/NeoX, BLOOM, MPT, OPT, Mamba/Falcon-Mamba, RWKV and more.
+LAYER_PATHS = ("model.layers", "model.language_model.layers", "language_model.model.layers", "transformer.h",
+               "gpt_neox.layers", "model.decoder.layers", "transformer.blocks", "backbone.layers", "rwkv.blocks",
+               "transformer.layers", "model.transformer.h")
+
+
+def find_layers(model):
+    """Return the model's list of decoder blocks, or raise if the architecture is unknown."""
+    for path in LAYER_PATHS:
+        obj = model
+        for part in path.split("."):
+            obj = getattr(obj, part, None)
+            if obj is None:
+                break
+        if obj is not None and hasattr(obj, "__len__") and len(obj) > 0:
+            return obj
+    raise ValueError(f"deep mode does not recognise the layer layout of {type(model).__name__}")
+
+
+class DeepModel:
+    def __init__(self, model_id: str, device: str | None = None):
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        self.torch = torch
+        # "Org/Name@/local/path" loads local weights while reporting the public model ID.
+        model_id, _, local_path = model_id.partition("@")
+        source = local_path or model_id
+        self.model_id = model_id
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+        self.tokenizer = AutoTokenizer.from_pretrained(source)
+        try:
+            model = AutoModelForCausalLM.from_pretrained(source, dtype=dtype)
+        except TypeError:   # transformers < 4.56 uses torch_dtype
+            model = AutoModelForCausalLM.from_pretrained(source, torch_dtype=dtype)
+        self.model = model.to(self.device).eval()
+        self.layers = find_layers(self.model)
+        self.n_layers = len(self.layers)
+        self.lock = threading.Lock()
+        self.projections: dict[str, "torch.Tensor"] = {}   # "<layer>" or "p:<layer>" -> (16, d) scrambled matrix
+        self.steering: dict[int, "torch.Tensor"] = {}      # layer -> nudge (d), relative to each token's norm
+
+    def set_projections(self, matrices: dict) -> None:
+        """Keys: a layer number ("15" or 15) for Behaviour, or "p:15" for the Deluxe premium space at layer 15."""
+        torch = self.torch
+        self.projections = {str(key): torch.tensor(m, dtype=torch.float32, device=self.device)
+                            for key, m in matrices.items()}
+
+    @staticmethod
+    def _layer_of(key: str) -> int:
+        return int(str(key).split(":")[-1])
+
+    def prompt_ids(self, messages: list[dict]):
+        """Token ids for a chat, exactly as Lens sends it. Templates that reject a system role (e.g. Gemma 2) get the
+        system text folded into the first user message instead."""
+        def encode(msgs):
+            out = self.tokenizer.apply_chat_template(msgs, add_generation_prompt=True, return_tensors="pt",
+                                                     return_dict=True)
+            return out["input_ids"].to(self.device)      # dict form works on transformers 4.4x and 5.x
+        try:
+            return encode(messages)
+        except Exception:
+            if not messages or messages[0].get("role") != "system":
+                raise
+            system, rest = messages[0]["content"], [dict(m) for m in messages[1:]]
+            for m in rest:
+                if m.get("role") == "user":
+                    m["content"] = system + "\n\n" + m["content"]
+                    break
+            return encode(rest)
+
+    def set_steering(self, directives: list[dict]) -> None:
+        """Steering directives from the cloud: [{"layer": L, "coeffs": [16 floats], "amount": a}, ...].
+
+        The nudge is v = M_L^T c (M_L is this device's scrambled matrix); each token's hidden state at layer L
+        gets amount * |h| * v added. amount 0 or an empty list switches steering off.
+        """
+        torch = self.torch
+        steering: dict[int, "torch.Tensor"] = {}
+        for item in directives:
+            layer, amount = int(item["layer"]), float(item.get("amount", 0.0))
+            if not amount or str(layer) not in self.projections:
+                continue
+            coeffs = torch.tensor(item["coeffs"], dtype=torch.float32, device=self.device)
+            vector = self.projections[str(layer)].T @ coeffs
+            steering[layer] = steering.get(layer, 0) + amount * vector / (vector.norm() + 1e-8)
+        self.steering = steering
+
+    def steer_raw(self, vectors: dict[int, "torch.Tensor"]) -> None:
+        """Set nudges directly (layer -> amount * unit vector). Used by tests and controls."""
+        self.steering = dict(vectors)
+
+    def _steer_hook(self, layer: int):
+        vector = self.steering[layer]
+
+        def hook(_module, _inputs, output):
+            hidden = output[0] if isinstance(output, tuple) else output
+            nudge = vector.to(hidden.dtype) * hidden.float().norm(dim=-1, keepdim=True).to(hidden.dtype)
+            hidden = hidden + nudge
+            return (hidden, *output[1:]) if isinstance(output, tuple) else hidden
+        return hook
+
+    def chat_stream(self, messages: list[dict], max_new_tokens: int = 512, temperature: float = 0.6,
+                    top_alternatives: int = 3) -> Iterator[dict]:
+        torch = self.torch
+        captured: dict[int, "torch.Tensor"] = {}
+
+        def make_hook(index):
+            def hook(_module, _inputs, output):
+                hidden = output[0] if isinstance(output, tuple) else output
+                captured[index] = hidden[0, -1, :].detach().float()   # last token, like the validated board
+            return hook
+
+        # Running mean of each projected layer's hidden state over the answer so far. The probes were
+        # validated on mean-pooled states, so Behaviour scores the mean (generic arithmetic, no IP).
+        self._sums = {}
+        self._count = 0
+        with self.lock:
+            handles = [self.layers[L].register_forward_hook(self._steer_hook(L)) for L in self.steering
+                       if 0 <= L < self.n_layers]          # steer first, so the readout sees the steered state
+            handles += [layer.register_forward_hook(make_hook(i)) for i, layer in enumerate(self.layers)]
+            try:
+                input_ids = self.prompt_ids(messages)
+                past = None
+                generated = 0
+                with torch.no_grad():
+                    while generated < max_new_tokens:
+                        out = self._forward(input_ids, past)
+                        past = self._cache(out, past, input_ids)
+                        logits = out.logits[0, -1].float()
+                        probs = torch.softmax(logits, dim=-1)
+                        if temperature > 0:
+                            choice = int(torch.multinomial(torch.softmax(logits / temperature, -1), 1))
+                        else:
+                            choice = int(torch.argmax(probs))
+                        if generated == 0:
+                            captured.clear()      # the prompt pass is not a generated token
+                        else:
+                            yield self._step_event(previous_token, previous_probs, captured, top_alternatives)
+                        if choice in (self.tokenizer.eos_token_id, *self._stop_ids()):
+                            break
+                        previous_token, previous_probs = choice, probs
+                        input_ids = torch.tensor([[choice]], device=self.device)
+                        generated += 1
+                    else:
+                        out = self._forward(input_ids, past)
+                        yield self._step_event(previous_token, previous_probs, captured, top_alternatives)
+            finally:
+                for handle in handles:
+                    handle.remove()
+        yield {"type": "done", "tokens": generated, "seconds": None}
+
+    def _forward(self, input_ids, past):
+        """One step. Transformers use past_key_values; state-space models (Mamba) use cache_params."""
+        torch = self.torch
+        if past is None:
+            return self.model(input_ids=input_ids, use_cache=True)
+        kind, cache, seen = past
+        if kind == "kv":
+            return self.model(input_ids=input_ids, past_key_values=cache, use_cache=True)
+        if kind == "ssm":
+            position = torch.tensor([seen], device=self.device)
+            return self.model(input_ids=input_ids, cache_params=cache, use_cache=True, cache_position=position)
+        return self.model(input_ids=torch.cat([cache, input_ids], dim=1))    # no cache: rerun the whole text
+
+    @staticmethod
+    def _cache(out, past, input_ids):
+        seen = (past[2] if past else 0) + input_ids.shape[1]
+        if getattr(out, "past_key_values", None) is not None:
+            return ("kv", out.past_key_values, seen)
+        if getattr(out, "cache_params", None) is not None:
+            return ("ssm", out.cache_params, seen)
+        prior = past[1] if past and past[0] == "full" else None
+        import torch
+        return ("full", input_ids if prior is None else torch.cat([prior, input_ids], dim=1), seen)
+
+    def _stop_ids(self) -> tuple:
+        ids = []
+        for token in ("<|im_end|>", "<|endoftext|>", "<|eot_id|>"):
+            tid = self.tokenizer.convert_tokens_to_ids(token)
+            if isinstance(tid, int) and tid >= 0 and tid != self.tokenizer.unk_token_id:
+                ids.append(tid)
+        return tuple(ids)
+
+    def _step_event(self, token_id: int, probs, captured: dict, top_k: int) -> dict:
+        """Event for one generated token; hidden states are those produced while reading that token."""
+        torch = self.torch
+        top = torch.topk(probs, top_k + 1)
+        alternatives = [{"text": self.tokenizer.decode([int(i)]), "p": float(p)}
+                        for p, i in zip(top.values, top.indices) if int(i) != token_id][:top_k]
+        alternatives = [a for a in alternatives if a["text"].strip()]
+        event = {"type": "token", "text": self.tokenizer.decode([token_id]), "p": float(probs[token_id]),
+                 "alternatives": alternatives,
+                 "layers": [round(float(captured[i].pow(2).mean().sqrt()), 4) for i in range(self.n_layers)
+                            if i in captured]}
+        if self.projections:
+            self._count += 1
+            for L in {self._layer_of(k) for k in self.projections}:
+                if L in captured:
+                    self._sums[L] = self._sums.get(L, 0) + captured[L]
+            means = {L: self._sums[L] / self._count for L in self._sums}
+            event["sigma"] = {k: (M @ means[self._layer_of(k)]).tolist() for k, M in self.projections.items()
+                              if self._layer_of(k) in means}
+            event["norm"] = {k: float(means[self._layer_of(k)].norm()) for k in self.projections
+                             if self._layer_of(k) in means}
+        return event

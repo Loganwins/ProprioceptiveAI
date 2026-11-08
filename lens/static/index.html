@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proprioceptive Lens</title>
+<style>
+  :root {
+    --bg1: #071631; --bg2: #0d2a5c; --panel: rgba(13, 34, 74, 0.72); --panel-2: rgba(19, 46, 98, 0.65);
+    --line: rgba(120, 170, 255, 0.18); --text: #e7efff; --muted: #9fb3d9; --accent: #5aa8ff; --accent-2: #7cf0ff;
+    --good: #46d39a; --warn: #ffc857; --bad: #ff6b81; --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  html { background: #071631; }
+  body {
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text);
+    background: radial-gradient(1200px 700px at 15% -10%, #1b4fa8 0%, transparent 60%),
+                radial-gradient(900px 600px at 110% 110%, #0f6fa8 0%, transparent 55%),
+                linear-gradient(160deg, var(--bg1), var(--bg2));
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid var(--line);
+    background: rgba(5, 16, 38, 0.45); backdrop-filter: blur(8px);
+  }
+  .logo { width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, var(--accent-2), var(--accent) 45%, #1a3d8f 75%);
+    box-shadow: 0 0 18px rgba(90, 168, 255, 0.6); }
+  .brand { font-weight: 700; letter-spacing: 0.2px; }
+  .brand small { display: block; font-weight: 500; color: var(--muted); font-size: 12px; margin-top: -2px; }
+  .spacer { flex: 1; }
+  select, button, .chip {
+    font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 7px 12px; cursor: pointer;
+  }
+  button:hover, select:hover { border-color: var(--accent); }
+  button.primary { background: linear-gradient(135deg, #2f7bff, #31b8ff); border: none; font-weight: 600; }
+  .chip { cursor: default; font-size: 13px; color: var(--muted); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: var(--muted); }
+  .dot.ok { background: var(--good); box-shadow: 0 0 8px var(--good); } .dot.bad { background: var(--bad); }
+  label.toggle { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); cursor: pointer; }
+
+  main { flex: 1; display: flex; min-height: 0; padding: 14px; gap: 0; }
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    display: flex; flex-direction: column; min-width: 0; overflow: hidden; backdrop-filter: blur(10px);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25); }
+  .pane.collapsed { display: none; }
+  .pane-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--line);
+    font-weight: 600; font-size: 14px; }
+  .pane-head .spacer { flex: 1; }
+  .pane-head button { padding: 3px 9px; font-size: 13px; }
+  .divider { width: 14px; cursor: col-resize; display: flex; align-items: center; justify-content: center; flex: none; }
+  .divider::after { content: ""; width: 4px; height: 48px; border-radius: 4px; background: var(--line); }
+  .divider:hover::after, .divider.dragging::after { background: var(--accent); }
+
+  #chat { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 92%; padding: 11px 14px; border-radius: 12px; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: linear-gradient(135deg, #2c6bff, #2a9cff); }
+  .msg.assistant { align-self: flex-start; background: rgba(8, 22, 50, 0.7); border: 1px solid var(--line); }
+  .msg .meta { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .tok { border-radius: 3px; position: relative; }
+  .tok[data-alts]:hover::after {
+    content: attr(data-alts); position: absolute; left: 0; top: 1.6em; z-index: 5; white-space: pre;
+    background: #04112a; border: 1px solid var(--accent); padding: 6px 8px; border-radius: 8px; font-size: 12px;
+    color: var(--text); pointer-events: none;
+  }
+  .empty { margin: auto; text-align: center; color: var(--muted); max-width: 420px; }
+  .empty h2 { color: var(--text); margin-bottom: 6px; }
+  form#composer { display: flex; gap: 10px; padding: 12px; border-top: 1px solid var(--line); }
+  textarea { flex: 1; resize: none; height: 54px; font: inherit; color: var(--text); background: rgba(4, 15, 36, 0.6);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  textarea:focus { outline: none; border-color: var(--accent); }
+
+  #inside { overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .card { background: rgba(5, 18, 44, 0.55); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .card h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--accent-2); }
+  .big { font-size: 30px; font-weight: 700; line-height: 1.1; }
+  .row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .stat small { display: block; color: var(--muted); font-size: 12px; }
+  canvas { width: 100%; height: 90px; display: block; }
+  .hes { display: flex; justify-content: space-between; gap: 8px; padding: 5px 0; border-bottom: 1px dashed var(--line);
+    font-size: 13px; }
+  .hes:last-child { border-bottom: none; }
+  .hes code { color: var(--warn); }
+  .muted { color: var(--muted); font-size: 13px; }
+  .locked { opacity: 0.85; }
+  .track.two { position: relative; }
+  .track.two .fill { position: absolute; top: 0; bottom: 0; }
+  .track.two .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
+  .z.pole { width: auto; min-width: 7.5em; white-space: nowrap; text-align: right; font-size: 11px; color: var(--muted); }
+  .badge.deluxe { border-color: #f5c96a; color: #f5c96a; }
+  .steer-row { display: grid; grid-template-columns: 9.5em 3.2em 1fr 3.2em; align-items: center; gap: 6px; margin: 6px 0; }
+  .steer-row input[type=range] { width: 100%; accent-color: var(--accent-2); }
+  .steer-row .end { font-size: 11px; color: var(--muted); text-align: center; }
+  .msg.before { opacity: 0.8; border-style: dashed; }
+  .badge { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line);
+    color: var(--muted); margin-left: 6px; }
+  .mem { font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  * { scrollbar-width: thin; scrollbar-color: rgba(120,170,255,0.35) transparent; }
+  ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: rgba(120,170,255,0.3); border-radius: 8px; }
+  .bar { display: grid; grid-template-columns: 170px 1fr 44px; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
+  .bar .track { height: 8px; border-radius: 6px; background: rgba(120,170,255,0.12); overflow: hidden; }
+  .bar .fill { height: 100%; border-radius: 6px; transition: width .3s; }
+  .bar .z { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #heat { height: 150px; image-rendering: pixelated; border-radius: 8px; background: rgba(0,0,0,0.25); }
+  .note { margin-top: 8px; font-size: 12.5px; color: var(--warn); }
+  dialog { background: #061633; color: var(--text); border: 1px solid var(--accent); border-radius: 14px;
+    width: min(720px, 92vw); max-height: 80vh; }
+  dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <div class="brand">Proprioceptive Lens<small>see inside your local model</small></div>
+  <div class="spacer"></div>
+  <span class="chip" id="backend"><span class="dot"></span>checking…</span>
+  <select id="model" title="Model" onchange="renderDeepIdle()"></select>
+  <label class="toggle"><input type="checkbox" id="useMemory" checked> Memory</label>
+  <label class="toggle"><input type="checkbox" id="colors" checked> Confidence colors</label>
+  <button id="memoryBtn">Memory <span id="memCount">0</span></button>
+</header>
+
+<main id="main">
+  <section class="pane" id="leftPane" style="flex: 1.25">
+    <div class="pane-head">💬 Chat<div class="spacer"></div>
+      <button data-expand="left" title="Expand chat">⤢</button>
+      <button id="newChat" title="New conversation">New</button></div>
+    <div id="chat">
+      <div class="empty" id="empty"><h2>Talk to your local model</h2>
+        Every word is tinted by how sure the model was. Hover any word to see what else it almost said.
+        The right pane shows what happened inside while it answered.</div>
+    </div>
+    <form id="composer">
+      <textarea id="input" placeholder="Message your model…  (Enter to send, Shift+Enter for a new line)"></textarea>
+      <button class="primary" id="send" type="submit">Send</button>
+    </form>
+  </section>
+
+  <div class="divider" id="divider" title="Drag to resize · double-click to reset"></div>
+
+  <section class="pane" id="rightPane" style="flex: 1">
+    <div class="pane-head">🔬 Inside the model<div class="spacer"></div>
+      <button data-expand="right" title="Expand">⤢</button></div>
+    <div id="inside">
+      <div class="card">
+        <h3>Confidence</h3>
+        <div class="row">
+          <div class="stat"><div class="big" id="confScore">—</div><small>average certainty</small></div>
+          <div class="stat"><div class="big" id="unsure">—</div><small>uncertain words</small></div>
+          <div class="stat"><div class="big" id="speed">—</div><small>tokens / second</small></div>
+        </div>
+        <canvas id="trace" width="600" height="90"></canvas>
+        <div class="muted">Each point is one token. Dips are where the model was unsure.</div>
+        <div class="note" id="confNote" hidden>High confidence is not the same as correct: models can be confidently
+          wrong. Word probabilities only show the surface; deep view and Behaviour (below) look at the model's internal state.</div>
+      </div>
+      <div class="card">
+        <h3>Where it hesitated</h3>
+        <div id="hesitations" class="muted">Ask something to see where the model weighed alternatives.</div>
+      </div>
+      <div class="card">
+        <h3>Memory used</h3>
+        <div id="memoryUsed" class="muted">Lens remembers your conversations locally and brings back what's relevant.</div>
+      </div>
+      <div class="card" id="deepCard">
+        <h3>Deep view <span class="badge">hidden states</span></h3>
+        <canvas id="heat" width="600" height="150" hidden></canvas>
+        <div class="muted" id="deepText">Layer-by-layer activity inside the network. Start Lens with a Hugging Face model
+          to see it: <code>lens --deep Qwen/Qwen2.5-3B-Instruct</code></div>
+      </div>
+      <div class="card" id="behaviourCard">
+        <h3>Behaviour <span class="badge">Proprioceptive Cloud</span></h3>
+        <div id="behaviour" class="muted"></div>
+      </div>
+      <div class="card" id="steerCard" hidden>
+        <h3>Steer <span class="badge deluxe">Deluxe</span></h3>
+        <div id="steer" class="muted"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<dialog id="memoryDialog">
+  <h3 style="margin-top:0">Saved memories <span class="muted" id="memDialogCount"></span></h3>
+  <div id="memoryList" class="muted">Loading…</div>
+  <p style="display:flex; gap:8px; justify-content:flex-end">
+    <button id="forgetAll">Forget everything</button><button id="closeMem" class="primary">Close</button></p>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let history = [];          // {role, content}
+let lastStatus = null, probeInfo = {}, deepRows = [];
+let busy = false;
+
+function esc(s) { return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function tint(p) {
+  if (p === null || p === undefined) return "transparent";
+  if (p >= 0.9) return "transparent";
+  if (p >= 0.6) return "rgba(255, 200, 87, 0.22)";
+  if (p >= 0.3) return "rgba(255, 160, 80, 0.35)";
+  return "rgba(255, 107, 129, 0.45)";
+}
+
+async function refreshStatus() {
+  try {
+    const s = await (await fetch("/api/status")).json();
+    const chip = $("backend");
+    chip.innerHTML = `<span class="dot ${s.backend_ok ? "ok" : "bad"}"></span>${s.backend_ok ? "Ollama connected" : "Ollama not found"}`;
+    const sel = $("model"), prev = sel.value || localStorage.getItem("lens-model");
+    sel.innerHTML = s.models.map(m => `<option>${esc(m)}</option>`).join("");
+    if (prev && s.models.includes(prev)) sel.value = prev;
+    else {  // sensible default: a small text chat model, not vision or huge models
+      const pick = s.models.find(m => /instruct/i.test(m) && !/-vl|vision|\b(70|72|120|235)b/i.test(m))
+                || s.models.find(m => !/-vl|vision|\b(70|72|120|235)b/i.test(m));
+      if (pick) sel.value = pick;
+    }
+    $("memCount").textContent = s.memory_count;
+    lastStatus = s; renderBehaviourIdle(); renderDeepIdle(); renderSteer();
+    if (!s.backend_ok) $("empty").innerHTML = `<h2>Ollama isn't running</h2>Install it from ollama.com, run
+      <code>ollama pull qwen3:4b</code>, then refresh this page.`;
+  } catch (e) { $("backend").innerHTML = '<span class="dot bad"></span>Lens server stopped'; }
+}
+
+function addMessage(role, html) {
+  $("empty")?.remove();
+  const div = document.createElement("div");
+  div.className = "msg " + role;
+  div.innerHTML = html;
+  $("chat").appendChild(div);
+  $("chat").scrollTop = $("chat").scrollHeight;
+  return div;
+}
+
+function renderDeepIdle() {
+  const s = lastStatus; if (!s) return;
+  if (s.deep_model) { $("deepText").textContent = `Each column is a word, each row a layer of ${s.deep_model} (${s.deep_layers} layers). Brighter = more activity.`; }
+  else if (s.deep_error) { $("deepText").innerHTML = "Deep mode could not start: " + esc(s.deep_error); }
+  else {
+    const hf = (s.deep_options || {})[$("model").value];
+    if (s.deep_loading) {
+      $("deepText").innerHTML = `Loading <b>${esc(s.deep_loading)}</b>… The first time, this downloads the model
+        (a few GB). Keep chatting meanwhile; this panel lights up when it's ready.`;
+    } else if (hf && s.deep_available) {
+      const sup = ((s.cloud || {}).supported_models || []).includes(hf);
+      $("deepText").innerHTML = `<p style="margin:0 0 8px">Look inside <b>${esc($("model").value)}</b> while it writes:
+        a live layer map${sup ? " and Behaviour (internal-state probes)" : ""}. Lens runs the same model's open
+        weights (<code>${esc(hf)}</code>) on your computer.</p>
+        <button class="primary" id="seeInside">See inside</button>`;
+      $("seeInside").onclick = () => seeInside(hf);
+    } else if (hf) {
+      $("deepText").innerHTML = `See inside <b>${esc($("model").value)}</b>: install the deep extra with
+        <code>pip install "proprioceptive-lens[deep]"</code>, restart Lens, then press <b>See inside</b>.`;
+    }
+  }
+}
+async function seeInside(hf) {
+  const res = await fetch("/api/deep/load", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({model: hf})});
+  if (!res.ok) { const d = await res.json(); $("deepText").innerHTML = `<span style="color:var(--warn)">${esc(d.error || "failed")}</span>`; return; }
+  localStorage.setItem("lens-model", "deep:" + hf);           // select it automatically when it is ready
+  await refreshStatus();
+  const poll = setInterval(async () => {
+    await refreshStatus();
+    if (lastStatus && !lastStatus.deep_loading) {
+      clearInterval(poll);
+      if (lastStatus.deep_model && $("model").value !== "deep:" + lastStatus.deep_model) $("model").value = "deep:" + lastStatus.deep_model;
+      renderDeepIdle();
+    }
+  }, 3000);
+}
+function renderBehaviourIdle() {
+  const s = lastStatus; if (!s || $("behaviour").dataset.live) return;
+  const c = s.cloud;
+  if (!c.enabled) {
+    const sup = (c.supported_models || []);
+    $("behaviour").innerHTML = (sup.length ? `<div class="muted" style="margin-bottom:6px">Available for <b>${sup.length} models</b>:
+      ${sup.map(esc).join(", ")}.</div>` : "") + `Behaviour reads the model's <b>internal state</b> with validated probes:
+      code or prose, formal or casual, following your instructions, creative or literal, assertive or hedged,
+      repeating itself, asking or stating.<p><button class="primary" id="cloudOn">Turn on Behaviour (free)</button></p>
+      <span class="muted">Privacy: only 16 scrambled numbers per word leave your computer — never your text, prompts
+      or the model's raw state.</span>`;
+    $("cloudOn").onclick = enableCloud;
+  } else if (!s.deep_model) {
+    $("behaviour").innerHTML = `Behaviour is on. It needs deep mode: start Lens with
+      <code>lens --deep Qwen/Qwen2.5-3B-Instruct</code>. <a href="#" id="cloudOff" style="color:var(--muted)">Turn off</a>`;
+    $("cloudOff").onclick = disableCloud;
+  } else {
+    $("behaviour").innerHTML = (c.error ? `<span style="color:var(--warn)">${esc(c.error)}</span><br>` : "") +
+      `Behaviour is on. Pick <b>deep:${esc(s.deep_model)}</b> and ask something.
+      <a href="#" id="cloudOff" style="color:var(--muted)">Turn off</a>`;
+    $("cloudOff").onclick = disableCloud;
+  }
+}
+// ---------------------------------------------------------------- Deluxe steering
+function renderSteer() {
+  const s = lastStatus, c = s && s.cloud;
+  const card = $("steerCard");
+  if (!c || !c.enabled || !s.deep_model || !(c.steerable || []).length) { card.hidden = true; return; }
+  card.hidden = false;
+  if (card.contains(document.activeElement)) return;          // don't redraw under the user's pointer
+  const labels = c.steerable.map(x => esc(x.label)).join(", ");
+  if (c.plan !== "deluxe") {
+    $("steer").innerHTML = `Push <b>${esc(s.deep_model)}</b> from the inside while it writes: ${labels}.
+      Each direction was tested on this model, with a before/after so you can see what changed.
+      <p style="margin:8px 0 4px"><b>Free for 7 days</b>, no card needed.</p>
+      <div style="display:flex;gap:6px"><input id="trialEmail" type="email" placeholder="you@example.com"
+      style="flex:1;min-width:0"><button class="primary" id="trialBtn">Start free trial</button></div>
+      <div style="display:flex;gap:6px;margin-top:6px"><input id="actToken" placeholder="Activation token from your email"
+      style="flex:1;min-width:0"><button id="actBtn">Activate</button></div><div id="actMsg" class="muted"></div>`;
+    $("actBtn").onclick = activateDeluxe;
+    $("trialBtn").onclick = startTrial;
+    return;
+  }
+  const current = c.steering || {};
+  $("steer").innerHTML = c.steerable.map(x => {
+    const lessMax = x.less ? x.less.max_amount : 0, moreMax = x.more ? x.more.max_amount : 0;
+    const cur = current[x.name] ? (current[x.name].direction === "more" ? 1 : -1) * current[x.name].amount : 0;
+    return `<div class="steer-row" title="${esc(x.label)}"><span>${esc(x.label)}</span>
+      <span class="end">${x.less ? "less" : "—"}</span>
+      <input type="range" data-name="${esc(x.name)}" min="${-lessMax}" max="${moreMax}" step="0.01" value="${cur}">
+      <span class="end">${x.more ? "more" : "—"}</span></div>`;
+  }).join("") + `<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+      <button id="compareBtn">Before / after</button><button id="steerReset">Reset</button>
+      <span class="muted" id="steerMsg"></span></div>`;
+  document.querySelectorAll("#steer input[type=range]").forEach(r => r.onchange = () => setSteer(r));
+  $("compareBtn").onclick = compareLast;
+  $("steerReset").onclick = async () => {
+    for (const r of document.querySelectorAll("#steer input[type=range]")) { r.value = 0; await setSteer(r); }
+  };
+}
+async function startTrial() {
+  $("actMsg").textContent = "Sending…";
+  const res = await fetch("/api/deluxe/trial", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({email: $("trialEmail").value})});
+  const data = await res.json();
+  $("actMsg").innerHTML = res.ok ? esc(data.message) + " Paste the token above." :
+    `<span style="color:var(--warn)">${esc(data.error || "Could not start the trial")}</span>`;
+}
+async function activateDeluxe() {
+  $("actMsg").textContent = "Checking…";
+  const res = await fetch("/api/deluxe/activate", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({activation_token: $("actToken").value})});
+  const data = await res.json();
+  if (!res.ok) { $("actMsg").innerHTML = `<span style="color:var(--warn)">${esc(data.error || "Could not activate")}</span>`; return; }
+  $("actToken").blur(); await refreshStatus();
+}
+async function setSteer(range) {
+  const v = parseFloat(range.value);
+  const res = await fetch("/api/steer", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({behaviour: range.dataset.name, direction: v >= 0 ? "more" : "less", amount: Math.abs(v)})});
+  const data = await res.json();
+  const msg = $("steerMsg");
+  if (msg) msg.innerHTML = res.ok ? (Object.keys(data.steering || {}).length ? "Steering on. Ask again, or compare."
+                                   : "Steering off.") : `<span style="color:var(--warn)">${esc(data.error || "failed")}</span>`;
+  range.blur();
+  if (lastStatus && res.ok) lastStatus.cloud = data;
+}
+async function compareLast() {
+  // Re-run the last question with steering off, shown beside the steered answer.
+  const lastUser = [...history].reverse().find(m => m.role === "user");
+  if (!lastUser || busy) { $("steerMsg").textContent = "Ask something first."; return; }
+  const cut = history.lastIndexOf(lastUser);
+  const bubble = addMessage("assistant before", '<div class="meta">Before (no steering)</div><span class="muted">…</span>');
+  busy = true;
+  let text = "";
+  try {
+    const res = await fetch("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({model: $("model").value, messages: history.slice(0, cut + 1), use_memory: false,
+                            options: {steer: false}})});
+    const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
+    while (true) {
+      const {value, done} = await reader.read(); if (done) break;
+      buf += dec.decode(value, {stream: true}); let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, idx).replace(/^data: /, ""); buf = buf.slice(idx + 2);
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "token") { text += ev.text; bubble.innerHTML = '<div class="meta">Before (no steering)</div>' + esc(text); }
+      }
+    }
+  } finally { busy = false; }
+}
+async function enableCloud() {
+  $("behaviour").textContent = "Connecting…";
+  const r = await fetch("/api/cloud/enable", {method: "POST"});
+  const d = await r.json();
+  if (!r.ok) $("behaviour").innerHTML = `<span style="color:var(--bad)">${esc(d.error || "Could not connect")}</span>`;
+  await refreshStatus();
+}
+async function disableCloud(e) { e && e.preventDefault(); await fetch("/api/cloud/disable", {method: "POST"}); delete $("behaviour").dataset.live; refreshStatus(); }
+
+function drawHeat() {
+  const c = $("heat"); if (!deepRows.length) return; c.hidden = false;
+  const layers = deepRows[0].length, cols = deepRows.length;
+  c.width = cols; c.height = layers;
+  const ctx = c.getContext("2d"), img = ctx.createImageData(cols, layers);
+  for (let l = 0; l < layers; l++) {
+    let min = Infinity, max = -Infinity;
+    for (const r of deepRows) { min = Math.min(min, r[l]); max = Math.max(max, r[l]); }
+    for (let t = 0; t < cols; t++) {
+      const v = Math.pow((deepRows[t][l] - min) / Math.max(max - min, 1e-9), 1.5), i = (l * cols + t) * 4;
+      img.data[i] = 30 + 90 * v; img.data[i + 1] = 60 + 180 * v; img.data[i + 2] = 120 + 135 * v; img.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function renderBehaviour(allScores, soft, hard, used, limit) {
+  const names = Object.keys(allScores[0] || {}).filter(n => (probeInfo[n] || {}).tier !== "TRUTH");
+  const truthNames = Object.keys(allScores[0] || {}).filter(n => (probeInfo[n] || {}).tier === "TRUTH");
+  const lockedTruth = Object.values(probeInfo).filter(p => p.tier === "TRUTH" && !truthNames.includes(p.name));
+  // Scores are of the running mean over the answer, so the latest step is the settled reading.
+  const latest = allScores[allScores.length - 1] || {};
+  const peak = {}; names.forEach(n => peak[n] = latest[n] || 0);
+  const scale = Math.max(hard * 1.5, ...Object.values(peak).map(Math.abs));
+  names.sort((a, b) => Math.abs(peak[b]) - Math.abs(peak[a]));
+  $("behaviour").dataset.live = "1";
+  $("behaviour").innerHTML = names.map(n => {
+    const z = peak[n], info = probeInfo[n] || {label: n, description: ""};
+    const star = info.tier === "PLATINUM" ? " ★" : "";
+    if (info.poles) {                      // two-sided: centred bar toward whichever end the model leans
+      const side = z >= 0 ? info.poles[1] : info.poles[0];
+      const width = Math.min(50, Math.abs(z) / 3 * 50);
+      const lean = Math.abs(z) < 0.5 ? "neutral" : `${Math.abs(z) >= 1.5 ? "clearly " : ""}${side}`;
+      return `<div class="bar" title="${esc(info.description || "")}: ${esc(info.poles[0])} ◀ ▶ ${esc(info.poles[1])}">
+        <span>${esc(info.label)}${star}</span>
+        <div class="track two"><div class="mid"></div><div class="fill" style="${z >= 0 ? "left:50%" : `left:${50 - width}%`};width:${width}%;background:var(--accent-2)"></div></div>
+        <span class="z pole">${esc(lean)}</span></div>`;
+    }
+    const color = z >= hard ? "var(--bad)" : z >= soft ? "var(--warn)" : "var(--good)";
+    return `<div class="bar" title="${esc(info.description || "")}"><span>${esc(info.label)}${star}</span>
+      <div class="track"><div class="fill" style="width:${Math.min(100, Math.max(0, z) / scale * 100)}%;background:${color}"></div></div>
+      <span class="z">${Math.max(0, z).toFixed(1)}</span></div>`;
+  }).join("") + truthSection(latest, truthNames, lockedTruth, soft, hard) +
+    `<div class="muted" style="margin-top:6px">Read from the model's internal state over the answer so far, relative to its
+    usual range. Centred bars lean toward one end or the other. ★ = the original probe passed the full adversarial battery. ${used != null && limit < 1000000 ? `Free today: ${used}/${limit} words.` : ""}</div>`;
+}
+function truthSection(latest, truthNames, locked, soft, hard) {
+  if (!truthNames.length && !locked.length) return "";
+  let html = `<div style="margin-top:10px"><b>Truth</b> <span class="badge deluxe">Deluxe</span></div>`;
+  html += truthNames.map(n => {
+    const z = Math.max(0, latest[n] || 0), info = probeInfo[n];
+    const color = z >= hard ? "var(--bad)" : z >= soft ? "var(--warn)" : "var(--good)";
+    return `<div class="bar" title="${esc(info.description || "")}"><span>${esc(info.label)}</span>
+      <div class="track"><div class="fill" style="width:${Math.min(100, z / (hard * 1.5) * 100)}%;background:${color}"></div></div>
+      <span class="z">${z.toFixed(1)}</span></div>`;
+  }).join("");
+  html += locked.map(p => `<div class="bar" title="${esc(p.description || "")}"><span>🔒 ${esc(p.label)}</span>
+      <div class="track"></div><span class="z muted">—</span></div>`).join("");
+  if (locked.length) html += `<div class="muted">Unlock the Truth readings with Deluxe (7-day free trial in the Steer panel).</div>`;
+  else html += `<div class="muted">σ above this model's own correct answers. A reading, not a verdict: check facts that matter.</div>`;
+  return html;
+}
+
+function drawTrace(probs) {
+  const c = $("trace"), ctx = c.getContext("2d");
+  const w = c.width = c.clientWidth * devicePixelRatio, h = c.height = 90 * devicePixelRatio;
+  ctx.clearRect(0, 0, w, h);
+  ctx.strokeStyle = "rgba(120,170,255,0.15)"; ctx.lineWidth = 1;
+  [0.25, 0.5, 0.75].forEach(f => { ctx.beginPath(); ctx.moveTo(0, h * f); ctx.lineTo(w, h * f); ctx.stroke(); });
+  const pts = probs.filter(p => p !== null);
+  if (pts.length < 2) return;
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, "#7cf0ff"); grad.addColorStop(1, "#ff6b81");
+  ctx.strokeStyle = grad; ctx.lineWidth = 2 * devicePixelRatio; ctx.beginPath();
+  pts.forEach((p, i) => { const x = i / (pts.length - 1) * w, y = (1 - p) * (h - 6) + 3; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+  ctx.stroke();
+}
+
+function updateInside(tokens, done) {
+  const probs = tokens.map(t => t.p);
+  const known = probs.filter(p => p !== null);
+  if (known.length) {
+    const avg = known.reduce((a, b) => a + b, 0) / known.length;
+    $("confScore").textContent = Math.round(avg * 100) + "%";
+    $("unsure").textContent = known.filter(p => p < 0.5).length;
+  }
+  drawTrace(probs);
+  if (done && done.tokens && done.seconds) $("speed").textContent = (done.tokens / done.seconds).toFixed(1);
+  const worst = tokens.map((t, i) => ({...t, i})).filter(t => t.p !== null && t.text.trim() && t.p < 0.9)
+    .sort((a, b) => a.p - b.p).slice(0, 6);
+  if (done && known.length) $("confNote").hidden = !(known.reduce((a, b) => a + b, 0) / known.length > 0.9);
+  $("hesitations").innerHTML = worst.length ? worst.map(t =>
+    `<div class="hes"><span><code>${esc(t.text.trim())}</code> ${Math.round(t.p * 100)}%</span>
+     <span class="muted">${t.alternatives.map(a => esc(a.text.trim()) + " " + Math.round(a.p * 100) + "%").join(" · ") || "—"}</span></div>`
+  ).join("") : '<span class="muted">No hesitations: every word was chosen with over 90% certainty.</span>';
+}
+
+async function send(text) {
+  if (busy || !text.trim()) return;
+  const model = $("model").value;
+  if (!model) { alert("No model available. Is Ollama running?"); return; }
+  localStorage.setItem("lens-model", model);
+  busy = true; $("send").disabled = true;
+  history.push({role: "user", content: text});
+  addMessage("user", esc(text));
+  const bubble = addMessage("assistant", '<span class="muted">thinking…</span>');
+  const tokens = []; let doneInfo = null, html = "";
+  let behaviourScores = []; deepRows = [];
+  try {
+    const res = await fetch("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({model, messages: history, use_memory: $("useMemory").checked})});
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    bubble.innerHTML = "";
+    while (true) {
+      const {value, done} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) >= 0) {
+        const line = buf.slice(0, idx).replace(/^data: /, ""); buf = buf.slice(idx + 2);
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "memory") {
+          $("memoryUsed").innerHTML = ev.items.length ? ev.items.map(m =>
+            `<div class="mem">↺ ${esc(m.user.slice(0, 140))}${m.source === "hindsight" ? ' <span class="badge">Hindsight</span>' : ""}</div>`).join("")
+            : '<span class="muted">No earlier conversation was relevant to this message.</span>';
+        } else if (ev.type === "behaviour_status") {
+          probeInfo = Object.fromEntries((ev.probes || []).map(p => [p.name, p]));
+          if (ev.enabled) $("behaviour").innerHTML = '<span class="muted">Reading internal state…</span>';
+        } else if (ev.type === "behaviour") {
+          behaviourScores = behaviourScores.concat(ev.scores);
+          renderBehaviour(behaviourScores, ev.soft, ev.hard, ev.used_today, ev.limit);
+        } else if (ev.type === "behaviour_error") {
+          $("behaviour").innerHTML = `<span style="color:var(--warn)">${esc(ev.message)}</span>`;
+        } else if (ev.type === "token") {
+          tokens.push(ev);
+          if (ev.layers && ev.layers.length) { deepRows.push(ev.layers); if (deepRows.length % 4 === 0) drawHeat(); }
+          const alts = ev.alternatives.length ? "Almost said:\n" + ev.alternatives.map(a => `${a.text.trim() || "␣"}  ${Math.round(a.p * 100)}%`).join("\n") : "";
+          const bg = $("colors").checked ? tint(ev.p) : "transparent";
+          html += `<span class="tok" style="background:${bg}"${alts ? ` data-alts="${esc(alts)}"` : ""}>${esc(ev.text)}</span>`;
+          bubble.innerHTML = html;
+          if (tokens.length % 4 === 0) updateInside(tokens, null);
+          $("chat").scrollTop = $("chat").scrollHeight;
+        } else if (ev.type === "done") {
+          doneInfo = ev;
+        } else if (ev.type === "similar_states") {
+          $("memoryUsed").insertAdjacentHTML("beforeend", `<div style="margin-top:8px"><b>Similar inner state</b>
+            <span class="muted">· earlier answers where the model's internal state was closest to this one</span></div>` +
+            ev.items.map(m => `<div class="mem">≈ ${Math.round(m.similarity * 100)}% · ${esc(m.user.slice(0, 120))}</div>`).join(""));
+        } else if (ev.type === "retained") {
+          $("memCount").textContent = ev.memory_count;
+        } else if (ev.type === "error") {
+          bubble.innerHTML += `<div class="meta" style="color:var(--bad)">${esc(ev.message)}</div>`;
+        }
+      }
+    }
+    updateInside(tokens, doneInfo); drawHeat();
+    const reply = tokens.map(t => t.text).join("");
+    history.push({role: "assistant", content: reply});
+    if (doneInfo) bubble.insertAdjacentHTML("beforeend",
+      `<div class="meta">${doneInfo.tokens || tokens.length} tokens · ${model}</div>`);
+  } catch (e) {
+    bubble.innerHTML = `<span style="color:var(--bad)">Could not reach the model: ${esc(String(e))}</span>`;
+  } finally { busy = false; $("send").disabled = false; }
+}
+
+$("composer").addEventListener("submit", e => { e.preventDefault(); const t = $("input").value; $("input").value = ""; send(t); });
+$("input").addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("composer").requestSubmit(); } });
+$("newChat").onclick = () => { history = []; $("chat").innerHTML = ""; };
+
+// Resizable / collapsible panes
+const left = $("leftPane"), right = $("rightPane"), divider = $("divider");
+function setSplit(fraction) {
+  fraction = Math.min(0.85, Math.max(0.15, fraction));
+  left.style.flex = String(fraction); right.style.flex = String(1 - fraction);
+  localStorage.setItem("lens-split", fraction);
+}
+divider.addEventListener("mousedown", e => {
+  e.preventDefault(); divider.classList.add("dragging");
+  const rect = $("main").getBoundingClientRect();
+  const move = ev => setSplit((ev.clientX - rect.left) / rect.width);
+  const up = () => { divider.classList.remove("dragging"); removeEventListener("mousemove", move); removeEventListener("mouseup", up); };
+  addEventListener("mousemove", move); addEventListener("mouseup", up);
+});
+divider.addEventListener("dblclick", () => { left.classList.remove("collapsed"); right.classList.remove("collapsed"); setSplit(0.56); });
+document.querySelectorAll("[data-expand]").forEach(b => b.onclick = () => {
+  const other = b.dataset.expand === "left" ? right : left;
+  other.classList.toggle("collapsed");
+});
+const saved = parseFloat(localStorage.getItem("lens-split")); if (saved) setSplit(saved);
+
+// Memory dialog
+$("memoryBtn").onclick = async () => {
+  const d = await (await fetch("/api/memory")).json();
+  $("memDialogCount").textContent = `(${d.count})`;
+  $("memoryList").innerHTML = d.items.length ? d.items.map(m =>
+    `<div class="mem"><b>You:</b> ${esc(m.user.slice(0, 160))}<br><span class="muted">${new Date(m.created * 1000).toLocaleString()} · ${esc(m.model || "")}</span>
+     <button style="float:right;padding:2px 8px" onclick="forget(${m.id})">forget</button></div>`).join("")
+    : "Nothing saved yet.";
+  $("memoryDialog").showModal();
+};
+async function forget(id) { await fetch("/api/memory?id=" + id, {method: "DELETE"}); $("memoryBtn").click(); refreshStatus(); }
+$("forgetAll").onclick = async () => { if (confirm("Forget all saved memories?")) { await fetch("/api/memory", {method: "DELETE"}); $("memoryDialog").close(); refreshStatus(); } };
+$("closeMem").onclick = () => $("memoryDialog").close();
+
+// Shareable prompt links: ?ask=<prompt> pre-fills the box; &send=1 sends it.
+const params = new URLSearchParams(location.search);
+refreshStatus().then(() => {
+  if (params.get("model")) $("model").value = params.get("model");
+  if (params.get("ask")) { $("input").value = params.get("ask"); if (params.get("send") === "1") $("composer").requestSubmit(); }
+});
+setInterval(refreshStatus, 15000);
+</script>
+</body>
+</html>

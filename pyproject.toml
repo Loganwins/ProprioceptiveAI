@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "proprioceptive-lens"
+version = "0.1.2"
+description = "See inside your local model: live confidence, hesitations, long-term memory and internal-state behaviour for local LLMs."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["llm", "ollama", "interpretability", "local-ai", "memory", "hidden-states"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+deep = ["torch>=2.1", "transformers>=4.43"]
+
+[project.urls]
+Homepage = "https://github.com/Loganwins/ProprioceptiveAI"
+Issues = "https://github.com/Loganwins/ProprioceptiveAI/issues"
+
+[project.scripts]
+lens = "lens.__main__:main"
+
+[tool.setuptools]
+packages = ["lens", "lens.static"]
+
+[tool.setuptools.package-data]
+"lens.static" = ["*"]
