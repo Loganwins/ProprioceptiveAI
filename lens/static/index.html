@@ -331,9 +331,9 @@ function renderSteer() {
     const lessMax = x.less ? x.less.max_amount : 0, moreMax = x.more ? x.more.max_amount : 0;
     const cur = current[x.name] ? (current[x.name].direction === "more" ? 1 : -1) * current[x.name].amount : 0;
     return `<div class="steer-row" title="${esc(x.label)}"><span>${esc(x.label)}</span>
-      <span class="end">${x.less ? "less" : "—"}</span>
+      <span class="end">${esc((x.ends || [])[0] || (x.less ? "less" : "—"))}</span>
       <input type="range" data-name="${esc(x.name)}" min="${-lessMax}" max="${moreMax}" step="0.01" value="${cur}">
-      <span class="end">${x.more ? "more" : "—"}</span></div>`;
+      <span class="end">${esc((x.ends || [])[1] || (x.more ? "more" : "—"))}</span></div>`;
   }).join("") + `<div style="display:flex;gap:8px;align-items:center;margin-top:8px">
       <button id="compareBtn">Before / after</button><button id="steerReset">Reset</button>
       <span class="muted" id="steerMsg"></span></div>`;

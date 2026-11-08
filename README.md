@@ -1,27 +1,48 @@
 # Proprioceptive Lens
 
-**See inside your local model.** A free app for anyone running local AI with [Ollama](https://ollama.com) or Hugging Face models.
+**Your local model is wrong more often than it sounds. Lens shows you where, and checks.**
+
+[![PyPI](https://img.shields.io/pypi/v/proprioceptive-lens)](https://pypi.org/project/proprioceptive-lens/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/proprioceptive-lens/)
+[![Models](https://img.shields.io/badge/Behaviour%20packs-131%20models-purple)](https://github.com/Loganwins/ProprioceptiveAI/blob/main/docs/MODELS.md)
+[![License: MIT](https://img.shields.io/badge/client-MIT-green)](#license)
+
+A free app for anyone running local AI with [Ollama](https://ollama.com) or Hugging Face. One command, no account, no
+dependencies, and nothing you type leaves your computer.
+
+```text
+You:   In what year was Albert Einstein born? Answer with just the year.
+Model: 1904            ← Lens: "190" was only 66% sure
+Lens:  Double-check → "Albert Einstein was born in 1879."   ✗ the answers disagree
+```
+*A real run on Llama 3.2 1B (unedited output from Lens's own test set).*
+
+```bash
+pip install proprioceptive-lens && lens
+```
+
+## What you get
+
+| | What it does | Evidence |
+|---|---|---|
+| **Certainty on every word** | Each word is tinted by how sure the model was. Hover to see what it almost said. | Read straight from the model's own probabilities |
+| **Double-check** | A short answer with a shaky word gets re-asked in full, and Lens tells you if the answer changes. | Short factual questions: Llama 3.2 1B **68.6% → 91.2%** correct, Qwen2.5 0.5B 77.5% → 87.9%, Qwen2.5 1.5B 93.8% → 99.0%, Llama 3.2 3B 96.4% → 98.7%. Passed on all 4 models tested. |
+| **See inside** (deep mode) | A live layer-by-layer map of the network while it writes. | Runs the model's open weights on your machine |
+| **Behaviour** (opt-in) | Internal-state readings: code or prose, repeating itself, creative or literal, assertive or hedged, asking or stating. | On realistic prompts across 16 popular models, the bars you see lean the right way **77%** of the time and the wrong way 8%. A bar that can't read a model reliably is hidden for that model. |
+| **Steering** (Deluxe) | Sliders that push the model's internal state while it writes, with a before/after. | **81 models, 184 directions**, each tested on its own model against random pushes. The most popular models also pass a long-answer safety check. |
+| **Private memory** | Remembers your conversations across chats, on your computer, for any model. | Local SQLite file you can view or delete |
+| **For agents** | `lens mcp` lets Claude Code, Cursor or Claude Desktop ask your local model and see how sure it was. | Claude Code plugin included |
+
+## What it can't do (read this)
+
+- **Confident mistakes.** Word probabilities can't catch a model that is wrong *and* sure. Example: `qwen3:4b` says the
+  17th US president was Garfield at 100% certainty (it was Andrew Johnson). Double-check catches *shaky* answers, not
+  these.
+- **Behaviour bars are readings, not proof.** They're right about three times in four on real prompts, not always.
+- **Steering is user-controlled on purpose.** Nothing steers automatically. Directions that made long answers worse
+  were withdrawn, and sliders stop at the strongest setting that passed.
 
 ![Lens showing a confidently wrong answer: every word at near-100% certainty](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-confidence.gif)
-
-*qwen3:4b says the 17th US president was Garfield, with 100% certainty. (It was Andrew Johnson.) Token confidence shows the surface; Lens also lets you look underneath.*
-
-- **Confidence you can see.** Every word is tinted by how sure the model was. Hover any word to see what it almost said.
-- **Where it hesitated.** A live certainty trace, plus the exact words where the model weighed alternatives.
-- **Double-check.** When a short answer contains a low-certainty word, Lens asks again for a full answer and tells you
-  if it changes. In Lens's tests, accuracy on short factual questions rose from 68.6% to 91.2% (Llama 3.2 1B),
-  77.5% to 87.9% (Qwen2.5 0.5B), 93.8% to 99.0% (Qwen2.5 1.5B) and 96.4% to 98.7% (Llama 3.2 3B). It can't catch
-  confident mistakes.
-- **It remembers you.** Private memory of your conversations, on your computer, for any model.
-- **Inside the model** (deep mode). A live layer-by-layer activity map of the network while it writes.
-- **Behaviour** (optional). Internal-state probes score what the model is doing: writing code or prose, formal or casual
-  register, following your instructions, creative or literal, assertive or hedged, repeating itself, asking or stating.
-  These probes were validated on the original model, then transferred to each supported model. There they were
-  re-tested against length and random-direction controls, and with a live test on the model's own answers.
-  Two-sided bars (formal ↔ casual, code ↔ prose, …) are centred between that model's own two extremes. A bar is shown
-  only where the model separates them reliably, so some models show fewer bars rather than misleading ones.
-- **Terminal mode and an API** for wiring Lens into your own stack.
-- **Private.** Everything runs locally. Behaviour is opt-in and sends only 16–32 scrambled numbers per word (16 per probe layer), never your text.
 
 ![Deep mode: layer activity map and live Behaviour scores](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-deep-behaviour.gif)
 
@@ -62,6 +83,11 @@ and **Before / after** re-runs your question without steering so you can see exa
 - Every steering direction is tested on each model before it is offered. It has to change the model's writing more
   than random pushes of the same size do. It also has to keep the text fluent, add no refusals and stay on topic.
   Sliders stop at the strongest setting that passed.
+- On the most popular models, long answers are checked too: a direction that makes 300-word answers more repetitive
+  is capped or withdrawn. Elsewhere, sliders stay at the gentlest strength that passed until that check has run.
+- **New: Answer in French** (Qwen2.5 3B, app 0.1.9+). Steers the model's internal state toward French with no
+  instruction in your prompt. In testing, 8 plain English questions went from 8% to 99% French at one step of the
+  slider, while a random push of the same size stayed at 1–2%.
 - Nothing steers automatically. You choose, and you can always compare against the unsteered answer.
 - Same privacy as Behaviour: your text never leaves your computer.
 

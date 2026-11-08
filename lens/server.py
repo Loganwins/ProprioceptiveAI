@@ -196,7 +196,8 @@ class LensApp:
         config = self.cloud.config or {}
         cloud = {"enabled": self.cloud.enabled, "url": self.cloud.url, "error": self.cloud_error,
                  "probes": config.get("probes", []), "plan": config.get("plan", "free"),
-                 "steerable": config.get("steerable", []), "upgrade_url": config.get("upgrade_url"),
+                 "steerable": config.get("steerable", []) + config.get("steerable_v2", []),
+                 "upgrade_url": config.get("upgrade_url"),
                  "steering": {b: {"direction": d, "amount": a} for b, (d, a) in self.steer_settings.items()},
                  "supported_models": self.cloud.supported_models()}
         return {"app": "proprioceptive-lens", "version": __version__, "backend": "ollama",

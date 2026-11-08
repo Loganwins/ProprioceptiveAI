@@ -87,7 +87,9 @@ class Cloud:
         data = self._call("GET", "/v1/lens/packs/" + urllib.parse.quote(model_id, safe="") + "/config")
         matrices = {}
         # Behaviour matrices are keyed by layer ("15"); Deluxe premium matrices by "p:15" (a separate space).
-        for prefix, entries in (("", data["layers"]), ("p:", data.get("premium_layers") or [])):
+        # Steer-only directions (e.g. language) use their own space, keyed "s:15".
+        for prefix, entries in (("", data["layers"]), ("p:", data.get("premium_layers") or []),
+                                ("s:", data.get("steer_layers") or [])):
             for layer in entries:
                 raw = base64.b64decode(layer["matrix_b64"])
                 values = struct.unpack(f"<{layer['rows'] * layer['cols']}f", raw)
@@ -135,7 +137,9 @@ class Cloud:
         """Steering directive for this device: {"layer", "coeffs" (16 numbers), "amount"} (Deluxe)."""
         if not self.config:
             raise CloudError("no behaviour pack loaded")
-        return self._call("POST", "/v1/lens/steer", {"pack_id": self.config["pack_id"],
-                                                    "key_version": self.config["key_version"],
-                                                    "behaviour": behaviour, "direction": direction, "amount": amount})
+        body = {"pack_id": self.config["pack_id"], "key_version": self.config["key_version"],
+                "behaviour": behaviour, "direction": direction, "amount": amount}
+        if any(x.get("name") == behaviour for x in self.config.get("steerable_v2") or []):
+            body["space"] = "s"                     # steer-only space: this client has its "s:<layer>" matrix
+        return self._call("POST", "/v1/lens/steer", body)
 

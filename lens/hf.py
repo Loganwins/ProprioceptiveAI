@@ -121,10 +121,11 @@ class DeepModel:
         steering: dict[int, "torch.Tensor"] = {}
         for item in directives:
             layer, amount = int(item["layer"]), float(item.get("amount", 0.0))
-            if not amount or str(layer) not in self.projections:
+            key = str(item.get("key", layer))                  # "s:<layer>" for steer-only spaces
+            if not amount or key not in self.projections:
                 continue
             coeffs = torch.tensor(item["coeffs"], dtype=torch.float32, device=self.device)
-            vector = self.projections[str(layer)].T @ coeffs
+            vector = self.projections[key].T @ coeffs
             steering[layer] = steering.get(layer, 0) + amount * vector / (vector.norm() + 1e-8)
         self.steering = steering
 
@@ -157,6 +158,7 @@ class DeepModel:
         # validated on mean-pooled states, so Behaviour scores the mean (generic arithmetic, no IP).
         self._sums = {}
         self._count = 0
+        self._stream_ids, self._stream_text = [], ""   # incremental decode: keeps word spaces on SentencePiece models
         with self.lock:
             handles = [self.layers[L].register_forward_hook(self._steer_hook(L)) for L in self.steering
                        if 0 <= L < self.n_layers]          # steer first, so the readout sees the steered state
@@ -224,6 +226,24 @@ class DeepModel:
                 ids.append(tid)
         return tuple(ids)
 
+    def _piece(self, token_id: int) -> str:
+        """Text this token adds to the answer. Decoding tokens one at a time drops the leading space that SentencePiece
+        tokenizers (Mistral, Llama 2, Phi-3, TinyLlama, Yi, Zephyr, ...) attach to a word, so the answer is decoded as a
+        whole and the new tail is returned. An incomplete UTF-8 sequence waits for the next token."""
+        ids = getattr(self, "_stream_ids", None)
+        if ids is None:                                   # outside chat_stream: single-token decode
+            return self.tokenizer.decode([token_id])
+        ids.append(token_id)
+        full = self.tokenizer.decode(ids)
+        if full.endswith("\ufffd"):
+            return ""
+        if not full.startswith(self._stream_text):        # tokenizer re-normalised earlier text: fall back
+            piece = self.tokenizer.decode([token_id])
+            self._stream_text += piece
+            return piece
+        piece, self._stream_text = full[len(self._stream_text):], full
+        return piece
+
     def _step_event(self, token_id: int, probs, captured: dict, top_k: int) -> dict:
         """Event for one generated token; hidden states are those produced while reading that token."""
         torch = self.torch
@@ -231,7 +251,7 @@ class DeepModel:
         alternatives = [{"text": self.tokenizer.decode([int(i)]), "p": float(p)}
                         for p, i in zip(top.values, top.indices) if int(i) != token_id][:top_k]
         alternatives = [a for a in alternatives if a["text"].strip()]
-        event = {"type": "token", "text": self.tokenizer.decode([token_id]), "p": float(probs[token_id]),
+        event = {"type": "token", "text": self._piece(token_id), "p": float(probs[token_id]),
                  "alternatives": alternatives,
                  "layers": [round(float(captured[i].pow(2).mean().sqrt()), 4) for i in range(self.n_layers)
                             if i in captured]}

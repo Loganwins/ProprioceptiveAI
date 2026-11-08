@@ -309,3 +309,76 @@ class DoubleCheckTest(unittest.TestCase):
         self.assertIsNone(needs_double_check(long_low))                       # only short answers (as measured)
         self.assertTrue(answers_agree("Abuja.", "The capital of Nigeria is Abuja."))
         self.assertFalse(answers_agree("Lagos.", "The capital of Nigeria is Abuja."))
+
+
+class SteeringTest(unittest.TestCase):
+    """The shipped steering hook adds amount * |h| * v on known tensors (no model download)."""
+
+    def test_constant_adds_amount_times_norm(self):
+        import torch
+        from lens.hf import DeepModel
+        m = DeepModel.__new__(DeepModel)
+        m.torch = torch
+        m.steering = {0: 0.5 * torch.tensor([1.0, 0.0, 0.0])}
+        h = torch.tensor([[[0.0, 3.0, 4.0]]])                      # |h| = 5
+        out = m._steer_hook(0)(None, None, (h,))[0]
+        self.assertTrue(torch.allclose(out, torch.tensor([[[2.5, 3.0, 4.0]]])))
+
+
+class SteerOnlySpaceTest(unittest.TestCase):
+    """Language steering lives in its own scrambled space: the client uses the "s:<layer>" matrix and says so."""
+
+    def test_directive_uses_its_own_matrix(self):
+        import torch
+        from lens.hf import DeepModel
+        m = DeepModel.__new__(DeepModel)
+        m.torch, m.device = torch, "cpu"
+        m.projections = {"3": torch.eye(4)[:2], "s:3": torch.eye(4)[2:]}       # different spaces, same layer
+        m.set_steering([{"layer": 3, "coeffs": [1.0, 0.0], "amount": 0.5, "key": "s:3"}])
+        self.assertTrue(torch.allclose(m.steering[3], torch.tensor([0.0, 0.0, 0.5, 0.0])))
+        m.set_steering([{"layer": 3, "coeffs": [1.0, 0.0], "amount": 0.5}])                 # behaviour space
+        self.assertTrue(torch.allclose(m.steering[3], torch.tensor([0.5, 0.0, 0.0, 0.0])))
+
+    def test_client_names_the_space_for_steer_only_behaviours(self):
+        from lens.cloud import Cloud
+        c = Cloud.__new__(Cloud)
+        c.config = {"pack_id": "p", "key_version": 1, "steerable_v2": [{"name": "language_french"}]}
+        sent = []
+        c._call = lambda method, path, body=None: sent.append(body) or {}
+        c.steer("language_french", "more", 0.1)
+        c.steer("confidence", "less", 0.1)
+        self.assertEqual(sent[0].get("space"), "s")
+        self.assertNotIn("space", sent[1])
+
+
+class StreamDecodeTest(unittest.TestCase):
+    """Streamed text keeps word spaces on SentencePiece tokenizers (single-token decode drops them)."""
+
+    def make(self, tok):
+        from lens.hf import DeepModel
+        m = DeepModel.__new__(DeepModel)
+        m.tokenizer = tok
+        m._stream_ids, m._stream_text = [], ""
+        return m
+
+    def test_spaces_survive_streaming(self):
+        words = ["Rivers", "are", "large", "bodies"]
+
+        class SentencePieceLike:                 # decode([i]) drops the word's leading space, like Mistral/Llama 2
+            def decode(self, ids):
+                return " ".join(words[i] for i in ids)
+        m = self.make(SentencePieceLike())
+        self.assertEqual("".join(m._piece(i) for i in range(4)), "Rivers are large bodies")
+
+    def test_real_mistral_tokenizer_if_present(self):
+        import os
+        from pathlib import Path
+        path = Path(os.environ.get("LENS_TEST_MISTRAL", "")) if os.environ.get("LENS_TEST_MISTRAL") else None
+        if not path or not path.exists():
+            self.skipTest("set LENS_TEST_MISTRAL to a local Mistral model folder to run this check")
+        from transformers import AutoTokenizer
+        tok = AutoTokenizer.from_pretrained(str(path))
+        text = "Je suis heureux de vous parler des fleuves. Rivers are large, flowing bodies of water."
+        ids = tok.encode(text, add_special_tokens=False)
+        m = self.make(tok)
+        self.assertEqual("".join(m._piece(i) for i in ids).strip(), text)
