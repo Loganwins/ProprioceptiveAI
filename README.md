@@ -8,6 +8,10 @@
 
 - **Confidence you can see.** Every word is tinted by how sure the model was. Hover any word to see what it almost said.
 - **Where it hesitated.** A live certainty trace, plus the exact words where the model weighed alternatives.
+- **Double-check.** When a short answer contains a low-certainty word, Lens asks again for a full answer and tells you
+  if it changes. In Lens's tests, accuracy on short factual questions rose from 68.6% to 91.2% (Llama 3.2 1B),
+  77.5% to 87.9% (Qwen2.5 0.5B), 93.8% to 99.0% (Qwen2.5 1.5B) and 96.4% to 98.7% (Llama 3.2 3B). It can't catch
+  confident mistakes.
 - **It remembers you.** Private memory of your conversations, on your computer, for any model.
 - **Inside the model** (deep mode). A live layer-by-layer activity map of the network while it writes.
 - **Behaviour** (optional). Internal-state probes score what the model is doing: writing code or prose, formal or casual

@@ -75,6 +75,11 @@ def ask(app: LensApp, prompt: str, model: str | None, use_memory: bool = True, m
         elif kind == "error":
             raise RuntimeError(event["message"])
     answer = "".join(t["text"] for t in tokens)
+    from .server import needs_double_check
+    flag = needs_double_check(tokens)
+    double = None
+    if flag:
+        double = {"low_certainty_word": flag, **app.double_check(model, [{"role": "user", "content": prompt}], answer)}
     if use_memory and answer:
         app.memory.retain(user_text, answer, model)
     known = [t["p"] for t in tokens if t.get("p") is not None]
@@ -90,6 +95,7 @@ def ask(app: LensApp, prompt: str, model: str | None, use_memory: bool = True, m
                         for t in hesitations],
         "behaviour": ({info.get(k, k): round(v, 2) for k, v in behaviour.items()} if behaviour else None),
         "memories_used": len(recalled),
+        "double_check": double,
     }
 
 
@@ -102,6 +108,11 @@ def ask_text(result: dict) -> str:
             f"\"{h['word']}\" {round(100 * h['p'])}%" + (" (almost: " + ", ".join(
                 f"\"{a['word']}\" {round(100 * a['p'])}%" for a in h["almost"][:3]) + ")" if h["almost"] else "")
             for h in result["hesitations"]))
+    if result.get("double_check"):
+        d = result["double_check"]
+        lines.append(f"Double-check (low certainty on \"{d['low_certainty_word']['word']}\"): asked again in full → "
+                     + ("consistent." if d["agrees"] else f"DIFFERENT answer: {d['full_answer']!r}. "
+                        "In Lens's tests the full answer was the more accurate one."))
     if result["behaviour"]:
         lines.append("Behaviour (σ above typical): " + ", ".join(
             f"{k} {v:+.1f}" for k, v in sorted(result["behaviour"].items(), key=lambda kv: -kv[1])))

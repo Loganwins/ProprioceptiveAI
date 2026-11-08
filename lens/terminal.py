@@ -100,6 +100,14 @@ class Terminal:
         self.last_tokens = tokens
         if self.use_memory:
             self.app.memory.retain(user_text, reply, self.model)
+        from .server import needs_double_check
+        flag = needs_double_check(tokens)
+        if flag and not self.json_mode:
+            out.write(self.c(DIM, f"\n  ↻ double-check (low certainty on \"{flag['word']}\")…"))
+            out.flush()
+            check = self.app.double_check(self.model, self.history[:-1], reply)
+            out.write(self.c(GREEN, " consistent.") if check["agrees"] else
+                      self.c(YELLOW, f"\n  ⚠ asked in full, it says: {check['full_answer']}"))
         if not self.json_mode:
             out.write("\n" + self.summary(tokens, done, recalled) + "\n")
             if behaviour:

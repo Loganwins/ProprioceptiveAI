@@ -222,6 +222,9 @@ class MCPTest(unittest.TestCase):
             def prepare(self, messages, use_memory):
                 return messages, [], messages[-1]["content"]
 
+            def double_check(self, model, messages, short_answer):
+                return {"full_answer": "The capital of France is Paris.", "agrees": True}
+
             def check_claims(self, claims):
                 return {"claims": [{"claim": c, "risk": 4.0 if "Sydney" in c else 0.2,
                                     "band": "high" if "Sydney" in c else "low"} for c in claims],
@@ -260,6 +263,8 @@ class MCPTest(unittest.TestCase):
         self.assertEqual(result["answer"], "Paris maybe")
         self.assertEqual(result["uncertain_words"], 1)
         self.assertEqual(result["hesitations"][0]["word"], "maybe")
+        self.assertEqual(result["double_check"]["low_certainty_word"]["word"], "maybe")   # short + low certainty
+        self.assertTrue(result["double_check"]["agrees"])
         self.assertIn("hello", by_id[4]["result"]["content"][0]["text"])
         self.assertEqual(by_id[5]["error"]["code"], -32601)
         self.assertEqual(by_id[None]["error"]["code"], -32700)
@@ -292,3 +297,15 @@ class ClaimToolTest(unittest.TestCase):
         self.assertIn("[HIGH    ] The capital of Australia is Sydney.", text)
         self.assertIn("[LOW     ] Paris is in France.", text)
         self.assertIn("not confirmation", text)
+
+
+class DoubleCheckTest(unittest.TestCase):
+    def test_trigger_and_agreement(self):
+        from lens.server import answers_agree, needs_double_check
+        short_low = [{"text": "Lagos", "p": 0.45}, {"text": ".", "p": 0.99}]
+        self.assertEqual(needs_double_check(short_low)["word"], "Lagos")
+        self.assertIsNone(needs_double_check([{"text": "Abuja", "p": 0.95}]))
+        long_low = [{"text": "word ", "p": 0.4}] * 40
+        self.assertIsNone(needs_double_check(long_low))                       # only short answers (as measured)
+        self.assertTrue(answers_agree("Abuja.", "The capital of Nigeria is Abuja."))
+        self.assertFalse(answers_agree("Lagos.", "The capital of Nigeria is Abuja."))

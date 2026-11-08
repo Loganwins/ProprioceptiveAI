@@ -100,6 +100,14 @@ class LensApp:
                 "scope": result.get("scope"), "bands": result.get("bands"),
                 "operating_points": result.get("operating_points"), "false_alarm_rates": result.get("false_alarm_rates")}
 
+    def double_check(self, model: str, messages: list[dict], short_answer: str) -> dict:
+        """Re-ask the last question for a full-sentence answer (no memory), and compare with the short answer."""
+        send, _, _ = self.prepare([dict(m) for m in messages], use_memory=False)
+        send[-1] = {**send[-1], "content": str(send[-1]["content"]).rstrip() + " Answer in one full sentence."}
+        tokens = [e for e in self.chat_events(model, send, [], {"num_predict": 96}) if e["type"] == "token" and not e.get("thinking")]
+        full = "".join(t["text"] for t in tokens).strip()
+        return {"full_answer": full, "agrees": answers_agree(short_answer, full)}
+
     def apply_steering(self) -> None:
         """Fetch this device's directives for the chosen behaviours and hand them to the deep model."""
         if not self.deep:
@@ -259,6 +267,28 @@ def model_memory_gb(model_id: str) -> float | None:
         return None
 
 
+DOUBLE_CHECK_P = 0.7          # measured: RESULTS §14 (Llama-3.2-1B 68.6%→91.2%, Qwen2.5-0.5B 77.5%→87.9%)
+DOUBLE_CHECK_MAX_WORDS = 25
+_STOP = {"the", "a", "an", "is", "was", "of", "in", "on", "and", "it", "to", "for", "by", "its", "are", "were", "be"}
+
+
+def needs_double_check(tokens: list[dict]) -> dict | None:
+    """A short answer with a low-certainty word is worth a second look (re-ask in full)."""
+    words = [t for t in tokens if t.get("p") is not None and t["text"].strip()]
+    text = "".join(t["text"] for t in tokens).strip()
+    if not words or len(text.split()) > DOUBLE_CHECK_MAX_WORDS:
+        return None
+    weakest = min(words, key=lambda t: t["p"])
+    return {"word": weakest["text"].strip(), "p": round(weakest["p"], 3)} if weakest["p"] < DOUBLE_CHECK_P else None
+
+
+def answers_agree(short: str, full: str) -> bool:
+    import re
+    key = [w for w in re.findall(r"[\w'-]+", short.lower()) if w not in _STOP]
+    full_l = full.lower()
+    return bool(key) and all(w in full_l for w in key)
+
+
 def split_claims(text: str) -> list[str]:
     """Split prose into sentence-sized claims."""
     import re
@@ -412,6 +442,14 @@ def make_handler(app: LensApp, port: int):
                 if app.deep:
                     app.deep.set_projections({})
                 return self._json(200, app.status()["cloud"])
+            if path == "/api/double_check":
+                messages = body.get("messages") or []
+                if not body.get("model") or not messages:
+                    return self._json(400, {"error": "model and messages are required"})
+                try:
+                    return self._json(200, app.double_check(body["model"], messages, str(body.get("answer", ""))))
+                except Exception as exc:
+                    return self._json(502, {"error": f"{type(exc).__name__}: {exc}"})
             if path == "/api/claims":
                 claims = body.get("claims") or split_claims(str(body.get("text", "")))
                 try:
