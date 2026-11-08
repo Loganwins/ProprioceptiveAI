@@ -159,6 +159,7 @@ class DeepModel:
         self._sums = {}
         self._count = 0
         self._stream_ids, self._stream_text = [], ""   # incremental decode: keeps word spaces on SentencePiece models
+        self._text_stop = False                          # an end marker appeared as plain text (Yi-1.5 spells <|im_end|>)
         with self.lock:
             handles = [self.layers[L].register_forward_hook(self._steer_hook(L)) for L in self.steering
                        if 0 <= L < self.n_layers]          # steer first, so the readout sees the steered state
@@ -181,6 +182,8 @@ class DeepModel:
                             captured.clear()      # the prompt pass is not a generated token
                         else:
                             yield self._step_event(previous_token, previous_probs, captured, top_alternatives)
+                            if self._text_stop:
+                                break
                         if choice in (self.tokenizer.eos_token_id, *self._stop_ids()):
                             break
                         previous_token, previous_probs = choice, probs
@@ -219,7 +222,9 @@ class DeepModel:
         return ("full", input_ids if prior is None else torch.cat([prior, input_ids], dim=1), seen)
 
     END_TOKENS = ("<|im_end|>", "<|endoftext|>", "<|eot_id|>", "<|end|>", "<end_of_turn>", "<|end_of_text|>",
-                  "<|im_sep|>", "</s>", "<|return|>", "<|end_of_turn|>", "<|eom_id|>")
+                  "<|im_sep|>", "</s>", "<|return|>", "<|end_of_turn|>", "<|eom_id|>",
+                  # a new turn starting means the answer is over (seen with sampling on Yi-1.5)
+                  "<|im_start|>", "<start_of_turn>", "<|start_header_id|>", "<|user|>")
 
     def _stop_ids(self) -> tuple:
         """End-of-turn tokens: the model's own declared ones (generation_config) plus the common chat end markers.
@@ -245,7 +250,9 @@ class DeepModel:
     def _piece(self, token_id: int) -> str:
         """Text this token adds to the answer. Decoding tokens one at a time drops the leading space that SentencePiece
         tokenizers (Mistral, Llama 2, Phi-3, TinyLlama, Yi, Zephyr, ...) attach to a word, so the answer is decoded as a
-        whole and the new tail is returned. An incomplete UTF-8 sequence waits for the next token."""
+        whole and the new tail is returned. An incomplete UTF-8 sequence waits for the next token. Text that could be the
+        start of an end marker is held back; a spelled-out end marker (Yi-1.5 writes <|im_end|> as plain text) ends the
+        answer without being shown."""
         ids = getattr(self, "_stream_ids", None)
         if ids is None:                                   # outside chat_stream: single-token decode
             return self.tokenizer.decode([token_id])
@@ -253,12 +260,27 @@ class DeepModel:
         full = self.tokenizer.decode(ids)
         if full.endswith("\ufffd"):
             return ""
+        shown = len(self._stream_text)                    # characters already returned to the caller
         if not full.startswith(self._stream_text):        # tokenizer re-normalised earlier text: fall back
             piece = self.tokenizer.decode([token_id])
             self._stream_text += piece
             return piece
-        piece, self._stream_text = full[len(self._stream_text):], full
-        return piece
+        cut = min((full.find(m) for m in self.END_TOKENS if m in full), default=-1)
+        if cut >= 0:                                      # end marker complete: stop, never show it
+            self._text_stop = True
+            out = full[shown:cut] if cut > shown else ""
+            self._stream_text = full[:max(cut, shown)]
+            return out
+        hold = 0                                          # longest tail that could still become an end marker
+        for m in self.END_TOKENS:
+            for k in range(min(len(m) - 1, len(full)), 0, -1):
+                if full.endswith(m[:k]):
+                    hold = max(hold, k)
+                    break
+        upto = max(len(full) - hold, shown)
+        out = full[shown:upto]
+        self._stream_text = full[:upto]
+        return out
 
     def _step_event(self, token_id: int, probs, captured: dict, top_k: int) -> dict:
         """Event for one generated token; hidden states are those produced while reading that token."""

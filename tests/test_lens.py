@@ -403,3 +403,37 @@ class StopTokenTest(unittest.TestCase):
                 return {"<|end|>": 32007, "<end_of_turn>": 107}.get(t, 0)
         m.model, m.tokenizer = Model(), Tok()
         self.assertEqual(set(m._stop_ids()), {7, 9, 32007, 107})
+
+
+class SpelledEndMarkerTest(unittest.TestCase):
+    """An end marker spelled out as plain text (Yi-1.5) ends the answer and never reaches the screen."""
+
+    def test_marker_split_across_tokens_is_cut(self):
+        from lens.hf import DeepModel
+        pieces = ["Hello", " there.", "\n", "<|", "im", "_end", "|>", "junk"]
+
+        class Tok:
+            def decode(self, ids):
+                return "".join(pieces[i] for i in ids)
+        m = DeepModel.__new__(DeepModel)
+        m.tokenizer = Tok()
+        m._stream_ids, m._stream_text, m._text_stop = [], "", False
+        shown = ""
+        for i in range(len(pieces)):
+            shown += m._piece(i)
+            if m._text_stop:
+                break
+        self.assertTrue(m._text_stop)
+        self.assertEqual(shown, "Hello there.\n")
+
+    def test_lone_angle_bracket_is_released(self):
+        from lens.hf import DeepModel
+        pieces = ["a ", "<", " b"]
+
+        class Tok:
+            def decode(self, ids):
+                return "".join(pieces[i] for i in ids)
+        m = DeepModel.__new__(DeepModel)
+        m.tokenizer = Tok()
+        m._stream_ids, m._stream_text, m._text_stop = [], "", False
+        self.assertEqual("".join(m._piece(i) for i in range(3)), "a < b")
