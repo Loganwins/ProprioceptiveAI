@@ -91,6 +91,10 @@
   .track.two .fill { position: absolute; top: 0; bottom: 0; }
   .track.two .mid { position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--muted); opacity: .6; }
   .z.pole { width: auto; min-width: 7.5em; white-space: nowrap; text-align: right; font-size: 11px; color: var(--muted); }
+  details.thinking { margin: 0 0 8px; color: var(--muted); font-size: 12.5px; }
+  details.thinking summary { cursor: pointer; }
+  details.thinking .think-body { white-space: pre-wrap; max-height: 220px; overflow: auto; margin-top: 6px;
+    padding: 6px 8px; border-left: 2px solid var(--line); }
   .badge.deluxe { border-color: #f5c96a; color: #f5c96a; }
   .steer-row { display: grid; grid-template-columns: 9.5em 3.2em 1fr 3.2em; align-items: center; gap: 6px; margin: 6px 0; }
   .steer-row input[type=range] { width: 100%; accent-color: var(--accent-2); }
@@ -250,7 +254,8 @@ function renderDeepIdle() {
       const sup = ((s.cloud || {}).supported_models || []).includes(hf);
       $("deepText").innerHTML = `<p style="margin:0 0 8px">Look inside <b>${esc($("model").value)}</b> while it writes:
         a live layer map${sup ? " and Behaviour (internal-state probes)" : ""}. Lens runs the same model's open
-        weights (<code>${esc(hf)}</code>) on your computer.</p>
+        weights (<code>${esc(hf)}</code>) on your computer.${s.gpu ? "" : ` <b>No GPU found:</b> it runs on your CPU,
+        where 0.5B–1.5B models are comfortable and 3B+ models are slow (a few words per second).`}</p>
         <button class="primary" id="seeInside">See inside</button>`;
       $("seeInside").onclick = () => seeInside(hf);
     } else if (hf) {
@@ -287,8 +292,11 @@ function renderBehaviourIdle() {
       or the model's raw state.</span>`;
     $("cloudOn").onclick = enableCloud;
   } else if (!s.deep_model) {
-    $("behaviour").innerHTML = `Behaviour is on. It needs deep mode: start Lens with
-      <code>lens --deep Qwen/Qwen2.5-3B-Instruct</code>. <a href="#" id="cloudOff" style="color:var(--muted)">Turn off</a>`;
+    const hf = (s.deep_options || {})[$("model").value];
+    $("behaviour").innerHTML = `Behaviour is on. It reads the model's internal state, so it runs on the model's open
+      weights: ${s.deep_available ? (hf ? "press <b>See inside</b> above." : "pick a model that has a Behaviour pack.")
+        : 'install the deep extra (<code>pip install "proprioceptive-lens[deep]"</code>), restart Lens, then press <b>See inside</b>.'}
+      <a href="#" id="cloudOff" style="color:var(--muted)">Turn off</a>`;
     $("cloudOff").onclick = disableCloud;
   } else {
     $("behaviour").innerHTML = (c.error ? `<span style="color:var(--warn)">${esc(c.error)}</span><br>` : "") +
@@ -500,7 +508,7 @@ async function send(text) {
   history.push({role: "user", content: text});
   addMessage("user", esc(text));
   const bubble = addMessage("assistant", '<span class="muted">thinking…</span>');
-  const tokens = []; let doneInfo = null, html = "";
+  const tokens = []; let doneInfo = null, html = "", thinkingText = "", thinkingCount = 0;
   let behaviourScores = []; deepRows = [];
   try {
     const res = await fetch("/api/chat", {method: "POST", headers: {"Content-Type": "application/json"},
@@ -529,13 +537,19 @@ async function send(text) {
           renderBehaviour(behaviourScores, ev.soft, ev.hard, ev.used_today, ev.limit);
         } else if (ev.type === "behaviour_error") {
           $("behaviour").innerHTML = `<span style="color:var(--warn)">${esc(ev.message)}</span>`;
+        } else if (ev.type === "token" && ev.thinking) {
+          thinkingText += ev.text; thinkingCount += 1;
+          bubble.innerHTML = `<details class="thinking"><summary>Model's thinking (${thinkingCount} tokens)…</summary>
+            <div class="think-body">${esc(thinkingText)}</div></details>` + html;
+          $("chat").scrollTop = $("chat").scrollHeight;
         } else if (ev.type === "token") {
           tokens.push(ev);
           if (ev.layers && ev.layers.length) { deepRows.push(ev.layers); if (deepRows.length % 4 === 0) drawHeat(); }
           const alts = ev.alternatives.length ? "Almost said:\n" + ev.alternatives.map(a => `${a.text.trim() || "␣"}  ${Math.round(a.p * 100)}%`).join("\n") : "";
           const bg = $("colors").checked ? tint(ev.p) : "transparent";
           html += `<span class="tok" style="background:${bg}"${alts ? ` data-alts="${esc(alts)}"` : ""}>${esc(ev.text)}</span>`;
-          bubble.innerHTML = html;
+          bubble.innerHTML = (thinkingCount ? `<details class="thinking"><summary>Model's thinking (${thinkingCount} tokens)</summary>
+            <div class="think-body">${esc(thinkingText)}</div></details>` : "") + html;
           if (tokens.length % 4 === 0) updateInside(tokens, null);
           $("chat").scrollTop = $("chat").scrollHeight;
         } else if (ev.type === "done") {

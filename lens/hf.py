@@ -10,6 +10,7 @@ whatever matrix the cloud sent and nothing else.
 """
 from __future__ import annotations
 
+import os
 import threading
 from typing import Iterator
 
@@ -44,7 +45,9 @@ class DeepModel:
         source = local_path or model_id
         self.model_id = model_id
         self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
-        dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
+        # bf16 everywhere by default: on CPU it measured 2.5x faster than fp32 with half the memory and identical
+        # greedy text (Qwen2.5-1.5B), and it matches the GPU precision the probes were validated with.
+        dtype = torch.float32 if os.environ.get("LENS_DTYPE", "").lower() in ("float32", "fp32") else torch.bfloat16
         self.tokenizer = AutoTokenizer.from_pretrained(source)
         try:
             model = AutoModelForCausalLM.from_pretrained(source, dtype=dtype)

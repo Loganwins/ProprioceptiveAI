@@ -15,7 +15,7 @@
   These probes were validated on the original model, then transferred to each supported model. There they were
   re-tested against length and random-direction controls, and with a live test on the model's own answers.
 - **Terminal mode and an API** for wiring Lens into your own stack.
-- **Private.** Everything runs locally. Behaviour is opt-in and sends only 16 scrambled numbers per word, never your text.
+- **Private.** Everything runs locally. Behaviour is opt-in and sends only 16–32 scrambled numbers per word (16 per probe layer), never your text.
 
 ![Deep mode: layer activity map and live Behaviour scores](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-deep-behaviour.gif)
 

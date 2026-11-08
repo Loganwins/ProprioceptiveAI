@@ -32,7 +32,7 @@ HELP = """Commands
   /models              list available models        /model <name>    switch model
   /why                 where the last answer hesitated, with the alternatives it weighed
   /memory              recent memories               /forget <id|all> forget memories
-  /behaviour on|off    internal-state behaviour scores (deep models; sends 16 scrambled numbers per word)
+  /behaviour on|off    internal-state behaviour scores (deep models; sends 16–32 scrambled numbers per word)
   /colors on|off       confidence colouring          /new             start a new conversation
   /json on|off         print raw JSON events         /quit            exit"""
 
@@ -66,6 +66,7 @@ class Terminal:
 
     # ------------------------------------------------------------------ chat
     def ask(self, text: str, out=sys.stdout) -> str:
+        self._thinking_shown = False
         self.history.append({"role": "user", "content": text})
         send, recalled, user_text = self.app.prepare(self.history, self.use_memory)
         tokens, behaviour, done = [], [], None
@@ -73,6 +74,12 @@ class Terminal:
             if self.json_mode:
                 out.write(json.dumps(event) + "\n")
                 out.flush()
+            if event["type"] == "token" and event.get("thinking"):
+                if not self.json_mode and not getattr(self, "_thinking_shown", False):
+                    out.write(self.c(DIM, "(thinking…) "))
+                    out.flush()
+                    self._thinking_shown = True
+                continue
             if event["type"] == "token":
                 tokens.append(event)
                 if not self.json_mode:

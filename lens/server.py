@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import sys
 import threading
 import time
 import uuid
@@ -128,12 +129,24 @@ class LensApp:
         import importlib.util
         return all(importlib.util.find_spec(m) is not None for m in ("torch", "transformers"))
 
+    @staticmethod
+    def gpu_available() -> bool:
+        try:
+            import torch
+            return bool(torch.cuda.is_available())
+        except Exception:
+            return False
+
     def load_deep(self, model_id: str) -> None:
         """'See inside': load a Hugging Face model in the background (first time downloads it), replacing any other."""
         if self.deep_loading:
             raise ValueError(f"already loading {self.deep_loading}")
         if not self.deep_available():
             raise ValueError('needs the deep extra: pip install "proprioceptive-lens[deep]"')
+        need, have = model_memory_gb(model_id), available_memory_gb()
+        if need and have and need > have * 0.85 and not self.gpu_available():
+            raise ValueError(f"{model_id.split('@')[0]} needs about {need:.0f} GB of memory and this computer has about "
+                             f"{have:.0f} GB free. Try a smaller model (for example 0.5B–1.5B) or close other apps.")
 
         def work():
             try:
@@ -183,7 +196,8 @@ class LensApp:
                 "memory_count": self.memory.count(), "hindsight": bool(self.memory.hindsight_url),
                 "deep_model": self.deep.model_id if self.deep else None, "deep_error": self.deep_error,
                 "deep_layers": self.deep.n_layers if self.deep else 0, "deep_options": deep_options,
-                "deep_loading": self.deep_loading, "deep_available": self.deep_available(), "cloud": cloud}
+                "deep_loading": self.deep_loading, "deep_available": self.deep_available(),
+                "gpu": self.gpu_available() if self.deep_available() else False, "cloud": cloud}
 
     def prepare(self, messages: list[dict], use_memory: bool) -> tuple[list[dict], list[dict], str]:
         """Return (messages to send, recalled memories, latest user text)."""
@@ -200,6 +214,49 @@ class LensApp:
         else:
             clean[0] = {"role": "system", "content": clean[0]["content"] + ("\n\n" + context if context else "")}
         return clean, recalled, user_text
+
+
+def available_memory_gb() -> float | None:
+    """Free RAM in GB (best effort, standard library only)."""
+    try:
+        if sys.platform.startswith("linux"):
+            for line in open("/proc/meminfo"):
+                if line.startswith("MemAvailable:"):
+                    return int(line.split()[1]) / 1e6
+        if sys.platform == "darwin":
+            return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 1e9 * 0.6    # no free count: estimate
+        if sys.platform.startswith("win"):
+            import ctypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [("dwLength", ctypes.c_ulong), ("dwMemoryLoad", ctypes.c_ulong),
+                            ("ullTotalPhys", ctypes.c_ulonglong), ("ullAvailPhys", ctypes.c_ulonglong),
+                            ("ullTotalPageFile", ctypes.c_ulonglong), ("ullAvailPageFile", ctypes.c_ulonglong),
+                            ("ullTotalVirtual", ctypes.c_ulonglong), ("ullAvailVirtual", ctypes.c_ulonglong),
+                            ("ullAvailExtendedVirtual", ctypes.c_ulonglong)]
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(stat)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            return stat.ullAvailPhys / 1e9
+    except Exception:
+        return None
+    return None
+
+
+def model_memory_gb(model_id: str) -> float | None:
+    """Approximate memory to run a Hugging Face model in bf16 (2 bytes per parameter + ~20%)."""
+    name, _, local = model_id.partition("@")
+    try:
+        if local:
+            size = sum(p.stat().st_size for p in Path(local).glob("*.safetensors"))
+            return size / 1e9 * 1.2 if size else None
+        import json as _json
+        import urllib.request
+        with urllib.request.urlopen(f"https://huggingface.co/api/models/{name}?expand[]=safetensors", timeout=8) as r:
+            total = (_json.load(r).get("safetensors") or {}).get("total")
+        return total * 2 / 1e9 * 1.2 if total else None
+    except Exception:
+        return None
 
 
 def split_claims(text: str) -> list[str]:
@@ -403,7 +460,7 @@ def make_handler(app: LensApp, port: int):
             self._sse_start()
             reply = []
             for event in app.chat_events(model, send, recalled, body.get("options")):
-                if event["type"] == "token":
+                if event["type"] == "token" and not event.get("thinking"):
                     reply.append(event["text"])
                 self._sse(event)
                 if event["type"] == "error":
@@ -434,7 +491,7 @@ def make_handler(app: LensApp, port: int):
                 if body.get("stream"):
                     self._sse_start()
                     for event in app.ollama.chat_stream(model, send):
-                        if event["type"] != "token":
+                        if event["type"] != "token" or event.get("thinking"):
                             continue
                         reply.append(event["text"])
                         self._sse({"id": completion_id, "object": "chat.completion.chunk", "created": created,
@@ -445,7 +502,7 @@ def make_handler(app: LensApp, port: int):
                     self.wfile.write(b"data: [DONE]\n\n")
                 else:
                     for event in app.ollama.chat_stream(model, send):
-                        if event["type"] == "token":
+                        if event["type"] == "token" and not event.get("thinking"):
                             reply.append(event["text"])
                     self._json(200, {"id": completion_id, "object": "chat.completion", "created": created,
                                      "model": model, "choices": [{"index": 0, "finish_reason": "stop",

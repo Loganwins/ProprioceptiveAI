@@ -55,13 +55,23 @@ class Ollama:
                 chunk = json.loads(raw)
                 if chunk.get("error"):
                     raise OllamaError(chunk["error"])
-                text = (chunk.get("message") or {}).get("content", "")
+                message = chunk.get("message") or {}
+                text = message.get("content", "")
+                # Thinking models (qwen3, deepseek-r1, ...): Ollama sends the reasoning in message.thinking, but the
+                # logprobs cover those tokens too. Tag them so the answer, memory and confidence use the answer only.
+                thinking = bool(message.get("thinking")) and not text
                 probs = chunk.get("logprobs") or []
                 if probs:
                     for item in probs:
-                        yield token_event(item)
-                elif text:
-                    yield {"type": "token", "text": text, "p": None, "alternatives": []}
+                        event = token_event(item)
+                        if thinking:
+                            event["thinking"] = True
+                        yield event
+                elif text or thinking:
+                    event = {"type": "token", "text": text or message.get("thinking", ""), "p": None, "alternatives": []}
+                    if thinking:
+                        event["thinking"] = True
+                    yield event
                 if chunk.get("done"):
                     yield {"type": "done", "tokens": chunk.get("eval_count"),
                            "seconds": (chunk.get("eval_duration") or 0) / 1e9,

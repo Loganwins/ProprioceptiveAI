@@ -66,7 +66,7 @@ def ask(app: LensApp, prompt: str, model: str | None, use_memory: bool = True, m
     tokens, behaviour, info = [], None, {}
     for event in app.chat_events(model, send, recalled, {"num_predict": max_tokens}):
         kind = event["type"]
-        if kind == "token":
+        if kind == "token" and not event.get("thinking"):
             tokens.append(event)
         elif kind == "behaviour":
             behaviour = event["scores"][-1] if event["scores"] else behaviour
