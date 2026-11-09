@@ -97,9 +97,14 @@ what it was meant to, and either commits it or puts the model back exactly as it
 or the options: your computer sends the fact's key (relation and subject), hashes of the options and text-free
 measurements, and receives the write and a signed record of what happened. Measured on held-out multiple-choice facts
 (four pre-registered single runs, 669 stems): the route corrected 334 of 336 wrong answers with 0 harms, and 0 of 219
-correct answers flipped when exposed to a write. Scope: eight fact relations (capital, currency, birth year, atomic
-number, event year, publication year, death year, founding year) on that one model; it is not general fact-checking.
-`lens verify "In what year did Isaac Newton die?" --options 1727 1725 1737 --relation death_year --subject "Isaac Newton"`
+correct answers flipped when exposed to a write. Scope: 25 validated fact relations (capitals and countries, currencies, languages, continents, elements, SI units and prefixes, planets, independence, reign, admission, battle, treaty and space-mission years,
+US states, US presidents, Olympic hosts, and years of birth, death, events, publication and founding) on that one model;
+it is not general fact-checking.
+From 0.1.16 the target comes from evidence: your computer embeds the question with a small local embedding model
+(downloaded once, about 1.2 GB) and sends only that vector; the cloud retrieves an authenticated fact record and binds it to
+one of your options, or abstains. On 300 fresh questions the evidence binder bound a target 300 times with 0 wrong bindings; a hard gate on the model's
+own uncertainty decides whether a write is attempted. The route is validated on 25 relations for Qwen2.5-0.5B (three more are bound as coverage only).
+`lens verify "In what year did Isaac Newton die?" --options 1727 1725 1737`
 
 **Truth check** (Deluxe). A local reader model reads factual claims, including claims from Claude or any
 other assistant, and Proprioceptive AI's internal-state probe returns a fabrication-risk reading for each:

@@ -182,6 +182,10 @@
         <h3>Behaviour <span class="badge">Proprioceptive Cloud</span></h3>
         <div id="behaviour" class="muted"></div>
       </div>
+      <div class="card" id="verifyCard" hidden>
+        <h3>Verified answer <span class="badge deluxe">Deluxe</span></h3>
+        <div id="verify" class="muted"></div>
+      </div>
       <div class="card" id="steerCard" hidden>
         <h3>Steer <span class="badge deluxe">Deluxe</span></h3>
         <div id="steer" class="muted"></div>
@@ -226,7 +230,7 @@ async function refreshStatus() {
       if (pick) sel.value = pick;
     }
     $("memCount").textContent = s.memory_count;
-    lastStatus = s; renderBehaviourIdle(); renderDeepIdle(); renderSteer();
+    lastStatus = s; renderBehaviourIdle(); renderDeepIdle(); renderSteer(); renderVerify();
     if (!s.backend_ok) $("empty").innerHTML = `<h2>Ollama isn't running</h2>Install it from ollama.com, run
       <code>ollama pull qwen3:4b</code>, then refresh this page.`;
   } catch (e) { $("backend").innerHTML = '<span class="dot bad"></span>Lens server stopped'; }
@@ -305,6 +309,39 @@ function renderBehaviourIdle() {
       <a href="#" id="cloudOff" style="color:var(--muted)">Turn off</a>`;
     $("cloudOff").onclick = disableCloud;
   }
+}
+// ---------------------------------------------------------------- Deluxe verified answers (RESULTS §30/§31)
+function renderVerify() {
+  const s = lastStatus, c = s && s.cloud, card = $("verifyCard");
+  if (!c || !c.enabled || !s.deep_model || !c.verified_answer) { card.hidden = true; return; }
+  card.hidden = false;
+  if (card.contains(document.activeElement)) return;
+  if (c.plan !== "deluxe") {
+    $("verify").innerHTML = `For a three-option factual question, <b>${esc(s.deep_model)}</b> gets a small, exact write inside
+      the model so its own first answer is the verified one; the write is checked and either committed or undone exactly.
+      Your question never leaves this computer. Part of Deluxe: start the trial in the Steer panel.`;
+    return;
+  }
+  if ($("vq")) return;                                          // already drawn; keep the user's text
+  $("verify").innerHTML = `<input id="vq" placeholder="Question, e.g. In what year did Isaac Newton die?" style="width:100%;margin-bottom:6px">
+    <div style="display:flex;gap:6px"><input id="va" placeholder="A" style="flex:1;min-width:0"><input id="vb" placeholder="B" style="flex:1;min-width:0">
+    <input id="vc" placeholder="C" style="flex:1;min-width:0"></div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:6px"><button class="primary" id="verifyBtn">Verify</button>
+    <span class="muted">Scope: facts in 13 relations (capitals, currencies, years, elements, …); 0.5B model only.</span></div>
+    <div id="verifyOut" style="margin-top:8px"></div>`;
+  $("verifyBtn").onclick = runVerify;
+}
+async function runVerify() {
+  const out = $("verifyOut"); out.textContent = "Measuring, binding evidence, writing, verifying…";
+  const res = await fetch("/api/verify", {method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({question: $("vq").value, options: [$("va").value, $("vb").value, $("vc").value]})});
+  const d = await res.json();
+  if (!res.ok) { out.innerHTML = `<span style="color:var(--warn)">${esc(d.error || "failed")}</span>`; return; }
+  const what = {commit: "corrected and verified inside the model", restore: "left as the model's own answer (the write did not verify; state restored exactly)",
+                abstain: "left as the model's own answer (no write: " + esc((d.provenance || {}).provenance || "not admitted") + ")"}[d.decision] || d.decision;
+  const gate = d.provenance && d.provenance.gate && d.provenance.gate.applied ? ` · uncertainty gate ${d.provenance.gate.passed ? "open" : "closed"}` : "";
+  out.innerHTML = `<div><b>${esc(d.letter || "—")}) ${esc(d.answer || "")}</b> — ${what}.</div>
+    <div class="muted">Model's own first answer: ${esc(d.native || "—")}) ${esc(d.native_answer || "")}${gate} · provenance signed by ${esc((d.provenance || {}).signer || "—")}</div>`;
 }
 // ---------------------------------------------------------------- Deluxe steering
 function renderSteer() {

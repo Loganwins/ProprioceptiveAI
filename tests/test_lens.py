@@ -505,3 +505,22 @@ class ConcurrentStreamTest(unittest.TestCase):
         self.assertEqual(b[0], plain)                        # concurrent override stream == solo unsteered stream
         self.assertNotEqual(steered, plain)
         self.assertEqual(list(m.steering), [0]); self.assertTrue(torch.equal(m.steering[0], 3.0 * unit))   # shared state untouched
+
+
+class ControlHelpersTest(unittest.TestCase):
+    def test_entropy_and_hashes(self):
+        import numpy as np
+        from lens.control import ExactControl, option_hash, probe_schedule
+        self.assertAlmostEqual(ExactControl.entropy(np.array([0.0, 0.0])), float(np.log(2)), places=6)
+        self.assertLess(ExactControl.entropy(np.array([10.0, 0.0, 0.0])), 0.01)
+        self.assertEqual(option_hash(" Paris "), option_hash("paris"))
+        pol, dose = probe_schedule("seed"); self.assertIn(pol, (-1, 1)); self.assertIn(dose, (.1, .25, .5, .75))
+
+
+class VerifiedAnswerRouteTest(unittest.TestCase):
+    def test_requires_deep_model_and_cloud(self):
+        import tempfile
+        from lens.server import LensApp
+        app = LensApp(Path(tempfile.mkdtemp()), "http://127.0.0.1:9", None)
+        with self.assertRaises(ValueError):
+            app.verified_answer("In what year did Isaac Newton die?", ["1727", "1725", "1737"])

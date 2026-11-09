@@ -19,8 +19,8 @@ def verify_main(argv) -> int:
     parser = argparse.ArgumentParser(prog="lens verify", description="Verified answer (Lens Deluxe): exact sparse control of the "
                                      "answer, verified then committed or exactly restored. Currently Qwen/Qwen2.5-0.5B-Instruct.")
     parser.add_argument("question"); parser.add_argument("--options", nargs=3, required=True, metavar=("A", "B", "C"))
-    parser.add_argument("--relation", required=True, help="fact relation, e.g. capital, death_year, publication_year")
-    parser.add_argument("--subject", required=True, help="the subject the fact is about, e.g. France")
+    parser.add_argument("--relation", help="optional: fact relation, e.g. capital, death_year (otherwise the target is bound from evidence)")
+    parser.add_argument("--subject", help="optional: the subject the fact is about, e.g. France")
     parser.add_argument("--model", default=os.environ.get("LENS_DEEP_MODEL", "Qwen/Qwen2.5-0.5B-Instruct"))
     parser.add_argument("--data", default=os.environ.get("LENS_DATA", str(Path.home() / ".proprioceptive-lens")))
     parser.add_argument("--cloud", default=os.environ.get("LENS_CLOUD_URL"), help=argparse.SUPPRESS)
@@ -40,10 +40,13 @@ def verify_main(argv) -> int:
     if not va:
         print("Verified answers are not available for this model yet (Lens Deluxe, Qwen/Qwen2.5-0.5B-Instruct).", file=sys.stderr); return 1
     deep = DeepModel(a.model)
-    ctl = ExactControl(deep, cloud, va["sites"], va["width"])
+    ctl = ExactControl(deep, cloud, va["sites"], va["width"], evidence=va.get("evidence"))
     prompt = a.question.strip() + "\n" + "\n".join(f"{c}) {o}" for c, o in zip("ABC", a.options)) + "\nAnswer with just the letter."
+    key = {"relation": a.relation, "subject": a.subject} if a.relation and a.subject else None
+    if key is None and not va.get("evidence"):
+        print("This server binds targets by key only: pass --relation and --subject.", file=sys.stderr); return 1
     try:
-        out = ctl.verified_answer(prompt, list(a.options), {"relation": a.relation, "subject": a.subject})
+        out = ctl.verified_answer(prompt, list(a.options), key)
     except CloudError as exc:
         print(f"Cloud: {exc}", file=sys.stderr); return 1
     if a.json:

@@ -113,6 +113,30 @@ class LensApp:
                 directives.append(self.cloud.steer(behaviour, direction, amount))
         self.deep.set_steering(directives)
 
+    def verified_answer(self, question: str, options: list[str]) -> dict:
+        """Verified answer (Deluxe): exact sparse control of the first answer token, verified then committed or exactly
+        restored; the target is bound from evidence server-side. Needs the deep model the cloud serves a controller for."""
+        from .control import ExactControl
+        if not self.deep:
+            raise ValueError("load a deep model first")
+        if not self.cloud.enabled:
+            raise ValueError("Proprioceptive Cloud is off")
+        self.ensure_cloud()
+        va = (self.cloud.config or {}).get("verified_answer")
+        if not va or (self.cloud.config or {}).get("model_id") != self.deep.model_id:
+            raise ValueError("verified answers are not available for this model yet (Qwen/Qwen2.5-0.5B-Instruct)")
+        options = [str(o).strip() for o in options]
+        if len(options) != 3 or any(not o for o in options) or len(set(o.lower() for o in options)) != 3:
+            raise ValueError("three distinct options are required")
+        prompt = question.strip() + "\n" + "\n".join(f"{c}) {o}" for c, o in zip("ABC", options)) + "\nAnswer with just the letter."
+        with self.deep.lock:
+            ctl = ExactControl(self.deep, self.cloud, va["sites"], va["width"], evidence=va.get("evidence"))
+            out = ctl.verified_answer(prompt, options, None if va.get("evidence") else {"relation": "", "subject": ""})
+        letter = out["letter"]
+        out["answer"] = options["ABC".index(letter)] if letter in "ABC" else None
+        out["native_answer"] = options["ABC".index(out["native"])] if out["native"] in "ABC" else None
+        return out
+
     def set_steer(self, behaviour: str, direction: str, amount: float) -> None:
         if direction not in ("more", "less"):
             raise ValueError("direction must be 'more' or 'less'")
@@ -194,6 +218,7 @@ class LensApp:
                  "steerable": config.get("steerable", []) + config.get("steerable_v2", []),
                  "upgrade_url": config.get("upgrade_url"),
                  "steering": {b: {"direction": d, "amount": a} for b, (d, a) in self.steer_settings.items()},
+                 "verified_answer": config.get("verified_answer"),       # Deluxe verified answers (RESULTS §30/§31)
                  "supported_models": self.cloud.supported_models()}
         return {"app": "proprioceptive-lens", "version": __version__, "backend": "ollama",
                 "backend_url": self.ollama.url, "backend_ok": ok or bool(self.deep), "models": models,
@@ -448,6 +473,13 @@ def make_handler(app: LensApp, port: int):
                     return self._json(400, {"error": "model and messages are required"})
                 try:
                     return self._json(200, app.double_check(body["model"], messages, str(body.get("answer", ""))))
+                except Exception as exc:
+                    return self._json(502, {"error": f"{type(exc).__name__}: {exc}"})
+            if path == "/api/verify":
+                try:
+                    return self._json(200, app.verified_answer(str(body.get("question", "")), list(body.get("options") or [])))
+                except (ValueError, CloudError) as exc:
+                    return self._json(400, {"error": str(exc)})
                 except Exception as exc:
                     return self._json(502, {"error": f"{type(exc).__name__}: {exc}"})
             if path == "/api/claims":

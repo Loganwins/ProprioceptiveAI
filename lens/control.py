@@ -31,8 +31,9 @@ def probe_direction(seed: str, width: int) -> np.ndarray:
 
 
 class ExactControl:
-    def __init__(self, deep, cloud, sites: dict, width: int):
+    def __init__(self, deep, cloud, sites: dict, width: int, evidence: dict | None = None):
         self.deep, self.cloud, self.width = deep, cloud, int(width)
+        self.evidence, self._embedder = evidence, None     # evidence-bound targets (Deluxe): question embedded locally, vector sent
         self.source, self.read, self.write = int(sites["source_block"]), int(sites["read_block"]), int(sites["write_block"])
         if self.deep.model.config.hidden_size != self.width:
             raise ValueError("pack controller width does not match this model")
@@ -118,8 +119,29 @@ class ExactControl:
             for h in handles:
                 h.remove()
 
+    def embed_question(self, question_line: str) -> np.ndarray:
+        """Embed the question with the archive's embedder (downloaded once, ~1.2 GB); only this vector goes to the cloud."""
+        if not self.evidence:
+            raise ValueError("this model has no evidence-bound verified answers")
+        if self._embedder is None:
+            from transformers import AutoModel, AutoTokenizer
+            tok = AutoTokenizer.from_pretrained(self.evidence["embedder"], padding_side="left")
+            mod = AutoModel.from_pretrained(self.evidence["embedder"], torch_dtype=self.deep.torch.float32).eval().to(self.deep.device)
+            self._embedder = (tok, mod)
+        tok, mod = self._embedder
+        batch = tok([question_line], padding=True, truncation=True, max_length=int(self.evidence.get("max_length", 128)), return_tensors="pt").to(self.deep.device)
+        with self.deep.torch.inference_mode():
+            hs = mod(**batch).last_hidden_state
+        v = hs[0, -1].float().cpu().numpy()
+        return v / (np.linalg.norm(v) + 1e-9)
+
+    @staticmethod
+    def entropy(logits: np.ndarray) -> float:
+        z = logits - logits.max(); p = np.exp(z); p /= p.sum()
+        return float(-(p * np.log(p + 1e-12)).sum())
+
     # --- the route ------------------------------------------------------------------------------------------------
-    def verified_answer(self, prompt: str, options: list[str], key: dict, probe_seed: str | None = None,
+    def verified_answer(self, prompt: str, options: list[str], key: dict | None = None, probe_seed: str | None = None,
                         force: bool = False, source_dose: float = 0.0) -> dict:
         """Answer a three-option question with the verified-answer route. Returns the released letter, the native letter,
         the decision (abstain/commit/restore) and the server-signed provenance. The model state is exactly restored."""
@@ -135,8 +157,13 @@ class ExactControl:
         letter_logits = [float(base["logits"][t]) for t in letters]
         native = next((c for c, t in zip("ABC", letters) if t == base["argmax_id"]), None)
         fields = self.capture(prefix, letters, d, dose)
+        body_extra = {}
+        if key is None:                                     # evidence-bound target: embed the question line, send the vector + entropy
+            body_extra = {"query_embedding": base64.b64encode(self.embed_question(prompt.split("\n")[0]).astype("<f4").tobytes()).decode(),
+                          "entropy": self.entropy(base["logits"])}
         opened = self.cloud.verify_open({
-            "key": {"relation": key["relation"], "subject": key["subject"]}, "option_hashes": [option_hash(o) for o in options],
+            **body_extra,
+            "key": ({"relation": key["relation"], "subject": key["subject"]} if key else {}), "option_hashes": [option_hash(o) for o in options],
             "letter_ids": letters, "letter_logits": letter_logits, "top": base["top"], "argmax_id": base["argmax_id"],
             "prefix_sha256": prefix_sha, "probe_seed": seed, "source_dose": source_dose * polarity, "force": force,
             "fields": base64.b64encode(fields.astype("<f4").tobytes()).decode(),
