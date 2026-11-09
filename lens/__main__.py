@@ -12,6 +12,49 @@ from . import __version__
 from .server import LensApp, serve
 
 
+def verify_main(argv) -> int:
+    """`lens verify`: a verified answer to a three-option factual question on a supported deep model (Lens Deluxe).
+    The model runs locally; only text-free measurements, the admission key and option hashes go to the cloud."""
+    import json
+    parser = argparse.ArgumentParser(prog="lens verify", description="Verified answer (Lens Deluxe): exact sparse control of the "
+                                     "answer, verified then committed or exactly restored. Currently Qwen/Qwen2.5-0.5B-Instruct.")
+    parser.add_argument("question"); parser.add_argument("--options", nargs=3, required=True, metavar=("A", "B", "C"))
+    parser.add_argument("--relation", required=True, help="fact relation, e.g. capital, death_year, publication_year")
+    parser.add_argument("--subject", required=True, help="the subject the fact is about, e.g. France")
+    parser.add_argument("--model", default=os.environ.get("LENS_DEEP_MODEL", "Qwen/Qwen2.5-0.5B-Instruct"))
+    parser.add_argument("--data", default=os.environ.get("LENS_DATA", str(Path.home() / ".proprioceptive-lens")))
+    parser.add_argument("--cloud", default=os.environ.get("LENS_CLOUD_URL"), help=argparse.SUPPRESS)
+    parser.add_argument("--json", action="store_true")
+    a = parser.parse_args(argv)
+    from .cloud import Cloud, CloudError
+    from .hf import DeepModel
+    from .control import ExactControl
+    cloud = Cloud(Path(a.data), a.cloud)
+    if not cloud.enabled:
+        cloud.enable()
+    try:
+        cloud.config = cloud._call("GET", f"/v1/lens/packs/{a.model}/config")
+    except CloudError as exc:
+        print(f"Cloud: {exc}", file=sys.stderr); return 1
+    va = cloud.config.get("verified_answer")
+    if not va:
+        print("Verified answers are not available for this model yet (Lens Deluxe, Qwen/Qwen2.5-0.5B-Instruct).", file=sys.stderr); return 1
+    deep = DeepModel(a.model)
+    ctl = ExactControl(deep, cloud, va["sites"], va["width"])
+    prompt = a.question.strip() + "\n" + "\n".join(f"{c}) {o}" for c, o in zip("ABC", a.options)) + "\nAnswer with just the letter."
+    try:
+        out = ctl.verified_answer(prompt, list(a.options), {"relation": a.relation, "subject": a.subject})
+    except CloudError as exc:
+        print(f"Cloud: {exc}", file=sys.stderr); return 1
+    if a.json:
+        print(json.dumps(out, indent=1)); return 0
+    letter = out["letter"]; chosen = a.options["ABC".index(letter)] if letter in "ABC" else "(no letter)"
+    verb = {"commit": "corrected and verified", "restore": "left as the model's own answer (write not verified; state restored)",
+            "abstain": "left as the model's own answer (not admitted)"}[out["decision"]]
+    print(f"{letter}) {chosen}  — {verb}; model's own first answer: {out['native']}; provenance signed by {out['provenance'].get('signer')}")
+    return 0
+
+
 def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] in ("term", "terminal"):
@@ -24,6 +67,8 @@ def main(argv=None) -> int:
     if argv and argv[0] == "mcp":
         from .mcp import main as mcp_main
         return mcp_main(argv[1:])
+    if argv and argv[0] == "verify":
+        return verify_main(argv[1:])
     parser = argparse.ArgumentParser(prog="lens", description="Proprioceptive Lens — see inside your local model. "
                                      "Run `lens term` for Proprioceptive Terminal Mode, `lens mcp` for the MCP server, `lens install` to add it to your apps.")
     parser.add_argument("--port", type=int, default=int(os.environ.get("LENS_PORT", 7777)))

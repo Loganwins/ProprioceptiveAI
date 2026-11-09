@@ -91,6 +91,16 @@ and **Before / after** re-runs your question without steering so you can see exa
 - Nothing steers automatically. You choose, and you can always compare against the unsteered answer.
 - Same privacy as Behaviour: your text never leaves your computer.
 
+**Verified answers** (Deluxe, app 0.1.15+, Qwen/Qwen2.5-0.5B-Instruct only). For a three-option factual question, Lens
+makes a small, exact write inside the model so that its own first answer is the verified one, checks that the write did
+what it was meant to, and either commits it or puts the model back exactly as it was. The cloud never sees your question
+or the options: your computer sends the fact's key (relation and subject), hashes of the options and text-free
+measurements, and receives the write and a signed record of what happened. Measured on held-out multiple-choice facts
+(four pre-registered single runs, 669 stems): the route corrected 334 of 336 wrong answers with 0 harms, and 0 of 219
+correct answers flipped when exposed to a write. Scope: eight fact relations (capital, currency, birth year, atomic
+number, event year, publication year, death year, founding year) on that one model; it is not general fact-checking.
+`lens verify "In what year did Isaac Newton die?" --options 1727 1725 1737 --relation death_year --subject "Isaac Newton"`
+
 **Truth check** (Deluxe). A local reader model reads factual claims, including claims from Claude or any
 other assistant, and Proprioceptive AI's internal-state probe returns a fabrication-risk reading for each:
 low, elevated or high. It catches **blatant mismatches** in factual relations: who wrote what, capitals, landmarks, currencies,

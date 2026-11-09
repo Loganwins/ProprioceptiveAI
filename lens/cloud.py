@@ -133,6 +133,20 @@ class Cloud:
             raise CloudError("Enter a valid email address.")
         return self._call("POST", "/v1/trial-signup", {"email": email, "product_code": "lens_deluxe"})
 
+    def verify_open(self, body: dict) -> dict:
+        """Open a verified-answer session (Deluxe): text-free measurements + admission key + option hashes."""
+        if not self.config:
+            raise CloudError("no behaviour pack loaded")
+        return self._call("POST", "/v1/lens/verify/open", {"pack_id": self.config["pack_id"], **body}, timeout=30.0)
+
+    def verify_step(self, session_id: str, letter_logits: list, top: list) -> dict:
+        return self._call("POST", "/v1/lens/verify/step", {"session_id": session_id, "letter_logits": letter_logits,
+                                                           "top": top}, timeout=30.0)
+
+    def verify_commit(self, session_id: str, realised_id: int, restored: dict) -> dict:
+        return self._call("POST", "/v1/lens/verify/commit", {"session_id": session_id, "realised_id": realised_id,
+                                                             "restored": restored}, timeout=30.0)
+
     def steer(self, behaviour: str, direction: str, amount: float) -> dict:
         """Steering directive for this device: {"layer", "coeffs" (16 numbers), "amount"} (Deluxe)."""
         if not self.config:
