@@ -89,12 +89,7 @@ class LensApp:
                 self.reader_config = None
                 raise ValueError("the claim check is part of Lens Deluxe (activate it in the Steer panel)")
             self.reader_projections = matrices
-        saved = reader.projections
-        reader.set_projections(self.reader_projections)
-        try:
-            steps = [reader.read(c) for c in claims]
-        finally:
-            reader.projections = saved
+        steps = [reader.read(c, projections=self.reader_projections) for c in claims]
         result = self.cloud.check_claims(self.reader_config, steps)
         return {"claims": [{"claim": c, **r} for c, r in zip(claims, result["results"])],
                 "scope": result.get("scope"), "bands": result.get("bands"),
@@ -297,16 +292,22 @@ def split_claims(text: str) -> list[str]:
     return [p.strip() for p in parts if len(p.strip()) > 3]
 
 
-def _chat_events(self, model: str, send: list[dict], recalled: list[dict], options: dict | None = None):
+def _chat_events(self, model: str, send: list[dict], recalled: list[dict], options: dict | None = None,
+                 state_context: dict | None = None):
     """Shared chat engine for the web app and the terminal: yields UI events."""
     deep = model.startswith(DEEP_PREFIX)
     scoring = deep and self.ensure_cloud()
-    self.last_state = None
+    context = state_context if state_context is not None else {}
+    context["state"] = None
+    config = dict(self.cloud.config or {}) if scoring else {}
+    context["space"] = (f"{config.get('model_id')}|{self.cloud.creds.get('device_id')}|{config.get('key_version')}"
+                        if config else None)
     yield {"type": "memory", "items": recalled}
     if deep:
         yield {"type": "behaviour_status", "enabled": scoring, "error": self.cloud_error,
                "probes": (self.cloud.config or {}).get("probes", []) if scoring else []}
     pending = []
+    stream = None
     try:
         unsteered = deep and (options or {}).get("steer") is False      # "before" side of a before/after
         stream = (self.deep.chat_stream(send, max_new_tokens=int((options or {}).get("num_predict", 512)),
@@ -317,7 +318,7 @@ def _chat_events(self, model: str, send: list[dict], recalled: list[dict], optio
             if event["type"] == "token" and "sigma" in event:
                 step = {"sigma": event.pop("sigma"), "norm": event.pop("norm")}
                 pending.append(step)
-                self.last_state = step                    # final running-mean fingerprint of this answer
+                context["state"] = step                  # owned by this request, including after model unlock
             yield event
             if scoring and (len(pending) >= SCORE_EVERY or (event["type"] == "done" and pending)):
                 try:
@@ -333,7 +334,8 @@ def _chat_events(self, model: str, send: list[dict], recalled: list[dict], optio
     except Exception as exc:  # never end a stream silently: the user must see what failed
         yield {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
     finally:
-        pass                                        # steering is per-call now; nothing shared to restore
+        if stream is not None and hasattr(stream, "close"):
+            stream.close()
 
 
 LensApp.chat_events = _chat_events
@@ -495,7 +497,8 @@ def make_handler(app: LensApp, port: int):
                 return self._json(400, {"error": "deep model not loaded"})
             self._sse_start()
             reply = []
-            for event in app.chat_events(model, send, recalled, body.get("options")):
+            state_context = {}
+            for event in app.chat_events(model, send, recalled, body.get("options"), state_context=state_context):
                 if event["type"] == "token" and not event.get("thinking"):
                     reply.append(event["text"])
                 self._sse(event)
@@ -504,9 +507,8 @@ def make_handler(app: LensApp, port: int):
             if body.get("use_memory", True):
                 row_id = app.memory.retain(user_text, "".join(reply), model)
                 self._sse({"type": "retained", "memory_count": app.memory.count()})
-                state, config = getattr(app, "last_state", None), app.cloud.config or {}
-                if row_id and state and config and (body.get("options") or {}).get("steer") is not False:
-                    space = f"{config.get('model_id')}|{app.cloud.creds.get('device_id')}|{config.get('key_version')}"
+                state, space = state_context.get("state"), state_context.get("space")
+                if row_id and state and space and (body.get("options") or {}).get("steer") is not False:
                     vector = [x for layer in sorted(state["sigma"], key=int) for x in state["sigma"][layer]]
                     similar = app.memory.similar_states(space, vector, exclude=row_id)
                     app.memory.retain_state(row_id, space, vector)

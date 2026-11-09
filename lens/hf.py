@@ -128,27 +128,31 @@ class DeepModel:
                     break
             return encode(rest)
 
-    def read(self, text: str, max_tokens: int = 128) -> dict:
+    def read(self, text: str, max_tokens: int = 128, projections: dict | None = None) -> dict:
         """Read a piece of text (no generation, no chat template) and return this device's projections of the
         mean hidden state over its tokens: {"sigma": {key: [16]}, "norm": {key: float}}. Used by claim checks,
         which were validated on mean-pooled reading of plain statements."""
         torch = self.torch
         ids = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=max_tokens)["input_ids"].to(self.device)
-        layers = sorted({self._layer_of(k) for k in self.projections})
         captured = {}
         with self.lock:
-            handles = [self.layers[L].register_forward_hook(
-                (lambda L: lambda _m, _i, out: captured.__setitem__(L, (out[0] if isinstance(out, tuple) else out)[0].float()))(L))
-                for L in layers]
+            active = dict(self.projections) if projections is None else {
+                str(k): torch.as_tensor(v, dtype=torch.float32, device=self.device)
+                for k, v in projections.items()}
+            layers = sorted({self._layer_of(k) for k in active})
+            handles = []
             try:
+                for L in layers:
+                    handles.append(self.layers[L].register_forward_hook(
+                        (lambda L: lambda _m, _i, out: captured.__setitem__(L, (out[0] if isinstance(out, tuple) else out)[0].float()))(L)))
                 with torch.no_grad():
                     self.model(input_ids=ids)
             finally:
                 for h in handles:
                     h.remove()
         means = {L: captured[L].mean(0) for L in captured}
-        return {"sigma": {k: (M @ means[self._layer_of(k)]).tolist() for k, M in self.projections.items()},
-                "norm": {k: float(means[self._layer_of(k)].norm()) for k in self.projections}}
+        return {"sigma": {k: (M @ means[self._layer_of(k)]).tolist() for k, M in active.items()},
+                "norm": {k: float(means[self._layer_of(k)].norm()) for k in active}}
 
     def set_steering(self, directives: list[dict]) -> None:
         """Steering directives from the cloud: [{"layer": L, "coeffs": [16 floats], "amount": a}, ...].
@@ -203,10 +207,13 @@ class DeepModel:
             self._count = 0
             self._stream_ids, self._stream_text = [], ""   # incremental decode: keeps word spaces on SentencePiece models
             self._text_stop = False                          # an end marker appeared as plain text (Yi-1.5 spells <|im_end|>)
-            handles = [self.layers[L].register_forward_hook(self._steer_hook(L, active[L])) for L in active
-                       if 0 <= L < self.n_layers]          # steer first, so the readout sees the steered state
-            handles += [layer.register_forward_hook(make_hook(i)) for i, layer in enumerate(self.layers)]
+            handles = []
             try:
+                for L, vector in active.items():
+                    if 0 <= L < self.n_layers:
+                        handles.append(self.layers[L].register_forward_hook(self._steer_hook(L, vector)))
+                for i, layer in enumerate(self.layers):
+                    handles.append(layer.register_forward_hook(make_hook(i)))
                 input_ids = self.prompt_ids(messages)
                 past = None
                 generated = 0
