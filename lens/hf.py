@@ -136,10 +136,10 @@ class DeepModel:
         ids = self.tokenizer(text, return_tensors="pt", truncation=True, max_length=max_tokens)["input_ids"].to(self.device)
         layers = sorted({self._layer_of(k) for k in self.projections})
         captured = {}
-        handles = [self.layers[L].register_forward_hook(
-            (lambda L: lambda _m, _i, out: captured.__setitem__(L, (out[0] if isinstance(out, tuple) else out)[0].float()))(L))
-            for L in layers]
         with self.lock:
+            handles = [self.layers[L].register_forward_hook(
+                (lambda L: lambda _m, _i, out: captured.__setitem__(L, (out[0] if isinstance(out, tuple) else out)[0].float()))(L))
+                for L in layers]
             try:
                 with torch.no_grad():
                     self.model(input_ids=ids)
@@ -172,8 +172,8 @@ class DeepModel:
         """Set nudges directly (layer -> amount * unit vector). Used by tests and controls."""
         self.steering = dict(vectors)
 
-    def _steer_hook(self, layer: int):
-        vector = self.steering[layer]
+    def _steer_hook(self, layer: int, vector=None):
+        vector = self.steering[layer] if vector is None else vector
 
         def hook(_module, _inputs, output):
             hidden = output[0] if isinstance(output, tuple) else output
@@ -183,7 +183,9 @@ class DeepModel:
         return hook
 
     def chat_stream(self, messages: list[dict], max_new_tokens: int = 512, temperature: float = 0.6,
-                    top_alternatives: int = 3) -> Iterator[dict]:
+                    top_alternatives: int = 3, steering: dict | None = None) -> Iterator[dict]:
+        """`steering` overrides self.steering for this call only (the app's before/after path passes {}), so one stream
+        never mutates state another stream may be reading."""
         torch = self.torch
         captured: dict[int, "torch.Tensor"] = {}
 
@@ -193,14 +195,15 @@ class DeepModel:
                 captured[index] = hidden[0, -1, :].detach().float()   # last token, like the validated board
             return hook
 
-        # Running mean of each projected layer's hidden state over the answer so far. The probes were
-        # validated on mean-pooled states, so Behaviour scores the mean (generic arithmetic, no IP).
-        self._sums = {}
-        self._count = 0
-        self._stream_ids, self._stream_text = [], ""   # incremental decode: keeps word spaces on SentencePiece models
-        self._text_stop = False                          # an end marker appeared as plain text (Yi-1.5 spells <|im_end|>)
-        with self.lock:
-            handles = [self.layers[L].register_forward_hook(self._steer_hook(L)) for L in self.steering
+        with self.lock:                                     # everything per-stream happens under ownership of the model
+            active = dict(self.steering) if steering is None else dict(steering)
+            # Running mean of each projected layer's hidden state over the answer so far. The probes were
+            # validated on mean-pooled states, so Behaviour scores the mean (generic arithmetic, no IP).
+            self._sums = {}
+            self._count = 0
+            self._stream_ids, self._stream_text = [], ""   # incremental decode: keeps word spaces on SentencePiece models
+            self._text_stop = False                          # an end marker appeared as plain text (Yi-1.5 spells <|im_end|>)
+            handles = [self.layers[L].register_forward_hook(self._steer_hook(L, active[L])) for L in active
                        if 0 <= L < self.n_layers]          # steer first, so the readout sees the steered state
             handles += [layer.register_forward_hook(make_hook(i)) for i, layer in enumerate(self.layers)]
             try:

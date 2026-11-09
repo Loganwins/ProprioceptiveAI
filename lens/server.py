@@ -122,8 +122,8 @@ class LensApp:
         if direction not in ("more", "less"):
             raise ValueError("direction must be 'more' or 'less'")
         previous = dict(self.steer_settings)
-        if amount > 0:
-            self.steer_settings[behaviour] = (direction, float(amount))
+        if amount > 0:                                   # one direction at a time: individually validated directions were
+            self.steer_settings = {behaviour: (direction, float(amount))}   # never qualified in combination (U11)
         else:
             self.steer_settings.pop(behaviour, None)
         try:
@@ -309,10 +309,8 @@ def _chat_events(self, model: str, send: list[dict], recalled: list[dict], optio
     pending = []
     try:
         unsteered = deep and (options or {}).get("steer") is False      # "before" side of a before/after
-        saved = self.deep.steering if unsteered else None
-        if unsteered:
-            self.deep.steering = {}
-        stream = (self.deep.chat_stream(send, max_new_tokens=int((options or {}).get("num_predict", 512)))
+        stream = (self.deep.chat_stream(send, max_new_tokens=int((options or {}).get("num_predict", 512)),
+                                        steering={} if unsteered else None)   # per-call override: shared state untouched
                   if deep else self.ollama.chat_stream(model, send,
                                                        options={k: v for k, v in (options or {}).items() if k != "steer"}))
         for event in stream:
@@ -335,8 +333,7 @@ def _chat_events(self, model: str, send: list[dict], recalled: list[dict], optio
     except Exception as exc:  # never end a stream silently: the user must see what failed
         yield {"type": "error", "message": f"{type(exc).__name__}: {exc}"}
     finally:
-        if unsteered:
-            self.deep.steering = saved
+        pass                                        # steering is per-call now; nothing shared to restore
 
 
 LensApp.chat_events = _chat_events

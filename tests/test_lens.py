@@ -469,3 +469,39 @@ class TokenizerRoundTripTest(unittest.TestCase):
         self.assertEqual(tok.decode(tok.encode("Hello! I can help you with tasks.", add_special_tokens=False)).strip(),
                          "Hello! I can help you with tasks.")
         self.assertEqual(tok.chat_template, "T")
+
+
+class ConcurrentStreamTest(unittest.TestCase):
+    """Two streams at once must not share per-stream state; a per-call steering override must not touch shared state."""
+
+    def test_two_streams_and_override(self):
+        import threading, torch
+        from transformers import GPT2Config, GPT2LMHeadModel
+        from lens.hf import DeepModel
+        torch.manual_seed(0)
+        m = DeepModel.__new__(DeepModel)
+        m.torch, m.device, m.lock = torch, "cpu", threading.Lock()
+        m.model = GPT2LMHeadModel(GPT2Config(n_layer=2, n_embd=16, n_head=2, vocab_size=40, n_positions=128, bos_token_id=0, eos_token_id=0)).eval()
+        m.layers, m.n_layers, m.projections = list(m.model.transformer.h), 2, {}
+        unit = torch.zeros(16); unit[0] = 1.0
+        m.steering = {0: 3.0 * unit}
+
+        class Tok:
+            eos_token_id = unk_token_id = None
+            def decode(self, ids): return " ".join(map(str, ids))
+            def convert_tokens_to_ids(self, t): return -1
+        m.tokenizer = Tok()
+        m.prompt_ids = lambda messages: torch.tensor([[1, 2, 3, 4, 5, 6]])
+
+        def run(override, out):
+            torch.manual_seed(7)
+            out.append([e["text"] for e in m.chat_stream([], max_new_tokens=12, temperature=0, steering=override) if e["type"] == "token"])
+        a, b = [], []
+        t1 = threading.Thread(target=run, args=(None, a)); t2 = threading.Thread(target=run, args=({}, b))
+        t1.start(); t2.start(); t1.join(); t2.join()
+        torch.manual_seed(7); steered = [e["text"] for e in m.chat_stream([], max_new_tokens=12, temperature=0) if e["type"] == "token"]
+        torch.manual_seed(7); plain = [e["text"] for e in m.chat_stream([], max_new_tokens=12, temperature=0, steering={}) if e["type"] == "token"]
+        self.assertEqual(a[0], steered)                      # concurrent steered stream == solo steered stream
+        self.assertEqual(b[0], plain)                        # concurrent override stream == solo unsteered stream
+        self.assertNotEqual(steered, plain)
+        self.assertEqual(list(m.steering), [0]); self.assertTrue(torch.equal(m.steering[0], 3.0 * unit))   # shared state untouched
