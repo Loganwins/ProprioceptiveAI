@@ -4,7 +4,7 @@
 
 [![PyPI](https://img.shields.io/pypi/v/proprioceptive-lens)](https://pypi.org/project/proprioceptive-lens/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/proprioceptive-lens/)
-[![Models](https://img.shields.io/badge/Behaviour%20packs-131%20models-purple)](https://github.com/Loganwins/ProprioceptiveAI/blob/main/docs/MODELS.md)
+[![Models](https://img.shields.io/badge/Behaviour%20packs-125%20models-purple)](https://github.com/Loganwins/ProprioceptiveAI/blob/main/docs/MODELS.md)
 [![License: MIT](https://img.shields.io/badge/client-MIT-green)](#license)
 
 A free app for anyone running local AI with [Ollama](https://ollama.com) or Hugging Face. One command, no account, no

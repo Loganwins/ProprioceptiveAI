@@ -172,7 +172,7 @@ class ExactControl:
             return {"letter": native, "native": native, "decision": "abstain", "attempts": 0, "write_norm": 0.0,
                     "provenance": opened["provenance"]}
         resp, attempts = opened, 0
-        while True:
+        while attempts < 8:  # bounded (audit D5): a server that never commits cannot spin the client forever
             write = np.frombuffer(base64.b64decode(resp["write"]), dtype="<f4").astype(np.float32)
             out = self.first_token(prefix, write=write if np.any(write) else None, source=src)
             if resp.get("commit"):
@@ -188,3 +188,4 @@ class ExactControl:
                         "raw_under_write": raw, "write_norm": float(np.linalg.norm(write)), "provenance": final["provenance"]}
             attempts += 1
             resp = self.cloud.verify_step(resp["session_id"], [float(out["logits"][t]) for t in letters], out["top"])
+        raise RuntimeError("verified-answer retry limit exceeded (8 attempts) — session abandoned")

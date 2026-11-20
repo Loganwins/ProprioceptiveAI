@@ -68,7 +68,8 @@ class LensApp:
 
     def check_claims(self, claims: list[str]) -> dict:
         """Truth check (Deluxe): a local reader model reads each claim; only scrambled numbers go to the cloud."""
-        claims = [c.strip() for c in claims if c and c.strip()][:64]
+        claims_in = [c.strip() for c in claims if c and c.strip()]
+        claims, claims_partial = claims_in[:64], len(claims_in) > 64  # cap kept, but now EXPLICIT (audit D2)
         if not claims:
             raise ValueError("no claims given")
         if not self.cloud.enabled:
@@ -92,6 +93,7 @@ class LensApp:
         steps = [reader.read(c, projections=self.reader_projections) for c in claims]
         result = self.cloud.check_claims(self.reader_config, steps)
         return {"claims": [{"claim": c, **r} for c, r in zip(claims, result["results"])],
+                "partial": claims_partial, "claims_checked": len(claims), "claims_total": len(claims_in),
                 "scope": result.get("scope"), "bands": result.get("bands"),
                 "operating_points": result.get("operating_points"), "false_alarm_rates": result.get("false_alarm_rates")}
 
@@ -293,6 +295,16 @@ DOUBLE_CHECK_MAX_WORDS = 25
 _STOP = {"the", "a", "an", "is", "was", "of", "in", "on", "and", "it", "to", "for", "by", "its", "are", "were", "be"}
 
 
+def origin_is_local(origin: str | None) -> bool:
+    """CSRF/origin wall (audit D4): a browser from any non-local page must not drive
+    this loopback server. Absent Origin (non-browser clients) passes; present Origin
+    must name 127.0.0.1/localhost."""
+    if not origin:
+        return True
+    import re
+    return bool(re.match(r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$", origin))
+
+
 def needs_double_check(tokens: list[dict]) -> dict | None:
     """A short answer with a low-certainty word is worth a second look (re-ask in full)."""
     words = [t for t in tokens if t.get("p") is not None and t["text"].strip()]
@@ -303,11 +315,26 @@ def needs_double_check(tokens: list[dict]) -> dict | None:
     return {"word": weakest["text"].strip(), "p": round(weakest["p"], 3)} if weakest["p"] < DOUBLE_CHECK_P else None
 
 
+_NEG = r"\b(no|not|never|isn'?t|wasn'?t|doesn'?t|didn'?t|aren'?t|weren'?t|cannot|can'?t|won'?t)\b"
+
 def answers_agree(short: str, full: str) -> bool:
+    """Agreement, not mere mention (audit D1): substring containment let 'No, Mars is
+    not the Red Planet.' 'agree' with 'Mars'. Now negation in the answering clause
+    dissolves agreement, and a negated short must be reflected in full's opening."""
     import re
     key = [w for w in re.findall(r"[\w'-]+", short.lower()) if w not in _STOP]
+    if not key:
+        return False
     full_l = full.lower()
-    return bool(key) and all(w in full_l for w in key)
+    if not all(w in full_l for w in key):
+        return False
+    first = re.split(r"[.!?\n]", full_l)[0]
+    m = re.search(r"\b" + re.escape(key[0]) + r"\b", first)
+    if m and re.search(_NEG, first[max(0, m.start() - 40):m.start()]):
+        return False
+    if re.match(r"\s*(no|not|never)\b", short.lower()) and not re.search(_NEG, first):
+        return False
+    return True
 
 
 def split_claims(text: str) -> list[str]:
@@ -411,6 +438,8 @@ def make_handler(app: LensApp, port: int):
         def do_GET(self):
             if not self._host_ok():
                 return
+            if not origin_is_local(self.headers.get("Origin")):
+                return self._json(403, {"error": "forbidden origin"})
             path = urlsplit(self.path).path
             if path == "/api/status":
                 return self._json(200, app.status())
@@ -438,6 +467,8 @@ def make_handler(app: LensApp, port: int):
         def do_DELETE(self):
             if not self._host_ok():
                 return
+            if not origin_is_local(self.headers.get("Origin")):
+                return self._json(403, {"error": "forbidden origin"})
             parts = urlsplit(self.path)
             if parts.path == "/api/memory":
                 query = parse_qs(parts.query)
@@ -448,6 +479,8 @@ def make_handler(app: LensApp, port: int):
         def do_POST(self):
             if not self._host_ok():
                 return
+            if not origin_is_local(self.headers.get("Origin")):
+                return self._json(403, {"error": "forbidden origin"})
             path = urlsplit(self.path).path
             try:
                 body = self._body()
