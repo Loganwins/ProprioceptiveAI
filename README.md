@@ -1,5 +1,9 @@
 # Proprioceptive Lens
 
+**See inside your local AI. Inspect its confidence. Steer its behaviour.**
+
+[Website](https://www.proprioceptiveai.com) · [Quick start](#install-and-run) · [Models](docs/MODELS.md) · [Agents & MCP](#use-it-from-claude-code-cursor-and-other-agents) · [Changelog](CHANGELOG.md) · [Report an issue](https://github.com/Loganwins/ProprioceptiveAI/issues)
+
 **Your local model is wrong more often than it sounds. Lens shows you where, and checks.**
 
 [![PyPI](https://img.shields.io/pypi/v/proprioceptive-lens)](https://pypi.org/project/proprioceptive-lens/)
@@ -20,6 +24,26 @@ Lens:  Double-check → "Albert Einstein was born in 1879."   ✗ the answers di
 ```bash
 pip install proprioceptive-lens && lens
 ```
+
+## See Lens in action
+
+**Token confidence and double-checking** — see what your model hesitated on, and when a second answer disagrees.
+
+![Lens showing a confidently wrong answer: every word at near-100% certainty](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-confidence.gif)
+
+**Deep mode and Behaviour** — explore layer activity and internal-state readings as the model writes.
+
+![Deep mode: layer activity map and live Behaviour scores](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-deep-behaviour.gif)
+
+## Choose your workflow
+
+| You want to… | Start here |
+|---|---|
+| Chat with your local model and inspect token confidence | [Install and run](#install-and-run) |
+| Explore hidden states and Behaviour readings | [Deep mode](#deep-mode-and-behaviour) · [Supported packs](docs/MODELS.md) |
+| Steer behaviour, try verified answers, or check claims | [Lens Deluxe](#lens-deluxe-steer-the-model-from-the-inside) — free, no card, no time limit; activation required |
+| Work in a terminal or build a pipeline | [Terminal mode](#proprioceptive-terminal-mode) |
+| Give Claude Code, Cursor, or another agent access to Lens | [Plugin and MCP setup](#use-it-from-claude-code-cursor-and-other-agents) |
 
 ## What you get
 
@@ -42,11 +66,9 @@ pip install proprioceptive-lens && lens
 - **Steering is user-controlled on purpose.** Nothing steers automatically. Directions that made long answers worse
   were withdrawn, and sliders stop at the strongest setting that passed.
 
-![Lens showing a confidently wrong answer: every word at near-100% certainty](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-confidence.gif)
-
-![Deep mode: layer activity map and live Behaviour scores](https://raw.githubusercontent.com/Loganwins/ProprioceptiveAI/main/docs/demo-deep-behaviour.gif)
-
 ## Install and run
+
+**You need Python 3.9+ and [Ollama](https://ollama.com) installed and running for this quick start.** If you already have a chat model downloaded, use it; otherwise pull the example below.
 
 ```bash
 pip install proprioceptive-lens      # no dependencies; Python 3.9+
@@ -164,6 +186,17 @@ For Cursor or another client, add a stdio server with command `lens` and argumen
 Lens listens only on `127.0.0.1` and rejects requests from other websites. Memories live in
 `~/.proprioceptive-lens/memory.sqlite3`. You can view or forget them in the app, or delete the file. Behaviour is off
 until you turn it on.
+
+## Get involved
+
+If Lens is useful to you, **star this repository** to help other local-AI builders find it.
+
+- **Try a model:** share the model name, Lens version, and a reproducible example in [Issues](https://github.com/Loganwins/ProprioceptiveAI/issues).
+- **Build an integration:** connect your agent through MCP or your application through the local OpenAI-compatible endpoint.
+- **Improve the client:** documentation, UI polish, tests, and installation fixes are welcome. See [Contributing](CONTRIBUTING.md).
+- **Follow development:** browse the [changelog](CHANGELOG.md) and [releases](https://github.com/Loganwins/ProprioceptiveAI/releases).
+
+The public repository contains the client. Proprietary backend implementations and probe assets remain outside this repository; see the license boundary below.
 
 ## License
 
