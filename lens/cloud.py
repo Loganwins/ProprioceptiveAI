@@ -120,14 +120,14 @@ class Cloud:
 
     # ---------------------------------------------------------------- Deluxe
     def activate(self, activation_token: str) -> dict:
-        """Unlock Lens Deluxe with the activation token emailed after checkout or trial sign-up."""
+        """Unlock Lens Deluxe with the activation token emailed after sign-up."""
         result = self._call("POST", "/v1/lens/activate", {"activation_token": activation_token.strip()})
         if self.config:
             self.config["plan"] = result.get("plan", "deluxe")
         return result
 
     def start_trial(self, email: str) -> dict:
-        """Ask Proprioceptive AI billing to email a 7-day Deluxe trial activation token (no card needed)."""
+        """Ask Proprioceptive AI to email a free Deluxe activation token (no card, no time limit)."""
         email = email.strip()
         if "@" not in email or len(email) > 254:
             raise CloudError("Enter a valid email address.")

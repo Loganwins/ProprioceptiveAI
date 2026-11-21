@@ -115,7 +115,7 @@ or a common misconception), and it doesn't handle numbers or dates. Treat "low" 
 confirmation. Your claims are read on your computer.
 Available in the app API (`/api/claims`) and to Claude through `lens mcp` (`check_claims`).
 
-Start the 7-day free trial from the Steer panel; no card is needed. Enter your email, then paste the activation token
+Deluxe is free, with no card and no time limit. Enter your email in the Steer panel, then paste the activation token
 you receive. Deluxe also removes the daily Behaviour limit.
 
 ## Proprioceptive Terminal Mode

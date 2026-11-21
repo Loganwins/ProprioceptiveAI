@@ -4,6 +4,20 @@ All notable changes to `proprioceptive-lens`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic
 Versioning](https://semver.org/).
 
+## [0.1.18] - 2026-11-20
+
+### Changed
+- **Lens Deluxe is free, with no time limit.** The Steer panel now says "Free, no card
+  and no time limit" and its button reads "Get free key" (was "Free for 7 days" /
+  "Start free trial"). The activation token emailed at sign-up no longer expires.
+  README and docstrings updated to match.
+
+### Fixed
+- Six externally audited defects (D1-D6), first released here: contradiction-aware
+  `answers_agree`; explicit truncation fields in `check_claims`; single-source
+  `__version__`; origin wall on GET/POST/DELETE (loopback-only origins); verified-answer
+  retry bounded at 8; the publish workflow runs the test suite before building.
+
 ## [0.1.17] - 2026-11-19
 
 First release published via **PyPI Trusted Publishing** (OIDC, no long-lived

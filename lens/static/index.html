@@ -319,7 +319,7 @@ function renderVerify() {
   if (c.plan !== "deluxe") {
     $("verify").innerHTML = `For a three-option factual question, <b>${esc(s.deep_model)}</b> gets a small, exact write inside
       the model so its own first answer is the verified one; the write is checked and either committed or undone exactly.
-      Your question never leaves this computer. Part of Deluxe: start the trial in the Steer panel.`;
+      Your question never leaves this computer. Part of Deluxe, which is free: get your key in the Steer panel.`;
     return;
   }
   if ($("vq")) return;                                          // already drawn; keep the user's text
@@ -354,9 +354,9 @@ function renderSteer() {
   if (c.plan !== "deluxe") {
     $("steer").innerHTML = `Push <b>${esc(s.deep_model)}</b> from the inside while it writes: ${labels}.
       Each direction was tested on this model, with a before/after so you can see what changed.
-      <p style="margin:8px 0 4px"><b>Free for 7 days</b>, no card needed.</p>
+      <p style="margin:8px 0 4px"><b>Free</b>, no card and no time limit.</p>
       <div style="display:flex;gap:6px"><input id="trialEmail" type="email" placeholder="you@example.com"
-      style="flex:1;min-width:0"><button class="primary" id="trialBtn">Start free trial</button></div>
+      style="flex:1;min-width:0"><button class="primary" id="trialBtn">Get free key</button></div>
       <div style="display:flex;gap:6px;margin-top:6px"><input id="actToken" placeholder="Activation token from your email"
       style="flex:1;min-width:0"><button id="actBtn">Activate</button></div><div id="actMsg" class="muted"></div>`;
     $("actBtn").onclick = activateDeluxe;
@@ -386,7 +386,7 @@ async function startTrial() {
     body: JSON.stringify({email: $("trialEmail").value})});
   const data = await res.json();
   $("actMsg").innerHTML = res.ok ? esc(data.message) + " Paste the token above." :
-    `<span style="color:var(--warn)">${esc(data.error || "Could not start the trial")}</span>`;
+    `<span style="color:var(--warn)">${esc(data.error || "Could not send your key")}</span>`;
 }
 async function activateDeluxe() {
   $("actMsg").textContent = "Checking…";
@@ -520,7 +520,7 @@ function truthSection(latest, truthNames, locked, soft, hard) {
   }).join("");
   html += locked.map(p => `<div class="bar" title="${esc(p.description || "")}"><span>🔒 ${esc(p.label)}</span>
       <div class="track"></div><span class="z muted">—</span></div>`).join("");
-  if (locked.length) html += `<div class="muted">Unlock the Truth readings with Deluxe (7-day free trial in the Steer panel).</div>`;
+  if (locked.length) html += `<div class="muted">Unlock the Truth readings with Deluxe (free, in the Steer panel).</div>`;
   else html += `<div class="muted">σ above this model's own correct answers. A reading, not a verdict: check facts that matter.</div>`;
   return html;
 }
