@@ -5,6 +5,6 @@
   "author": { "name": "Proprioceptive AI" },
   "homepage": "https://github.com/Loganwins/ProprioceptiveAI",
   "repository": "https://github.com/Loganwins/ProprioceptiveAI",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "keywords": ["ollama", "local-llm", "interpretability", "confidence", "mcp"]
 }
