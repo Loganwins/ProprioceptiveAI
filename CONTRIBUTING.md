@@ -21,7 +21,7 @@ Keep a pull request focused. Explain the user-visible change and how you checked
 
 ## Public client and private backend
 
-This repository's client is MIT-licensed. The proprietary Behaviour probes and scoring service are separate, as described in [the README](README.md#license). Client contributions do not require publishing backend code, model probe assets, service credentials, or internal deployment records.
+This repository's client is licensed under Apache 2.0. The proprietary Behaviour probes and scoring service are separate, as described in [the README](README.md#license). Client contributions do not require publishing backend code, model probe assets, service credentials, or internal deployment records.
 
 ## Share what you build
 

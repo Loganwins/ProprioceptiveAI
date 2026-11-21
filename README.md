@@ -9,7 +9,7 @@
 [![PyPI](https://img.shields.io/pypi/v/proprioceptive-lens)](https://pypi.org/project/proprioceptive-lens/)
 [![Python 3.9+](https://img.shields.io/badge/python-3.9%2B-blue)](https://pypi.org/project/proprioceptive-lens/)
 [![Models](https://img.shields.io/badge/Behaviour%20packs-125%20models-purple)](https://github.com/Loganwins/ProprioceptiveAI/blob/main/docs/MODELS.md)
-[![License: MIT](https://img.shields.io/badge/client-MIT-green)](#license)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue)](LICENSE)
 
 A free app for anyone running local AI with [Ollama](https://ollama.com) or Hugging Face. One command, no account, no
 dependencies, and nothing you type leaves your computer.
@@ -200,5 +200,7 @@ The public repository contains the client. Proprietary backend implementations a
 
 ## License
 
-MIT for this client. The Behaviour probes and the scoring service are proprietary to Proprioceptive AI, are not part
-of this package, and no licence to them (or to any Proprioceptive AI patent) is granted by this licence.
+The client code in this repository is licensed under the [Apache License, Version 2.0](LICENSE).
+Copyright (c) 2026 Proprioceptive AI.
+
+The separately hosted backend, Behaviour probes, scoring service, and private probe assets are not included in this repository and remain proprietary. This boundary does not modify the terms of the Apache License for the included client code.
