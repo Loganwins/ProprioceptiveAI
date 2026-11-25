@@ -4,6 +4,24 @@ All notable changes to `proprioceptive-lens`. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow [Semantic
 Versioning](https://semver.org/).
 
+## [0.1.19] - 2026-11-25
+
+### Changed
+- **Apache License 2.0.** The Lens client and its Claude Code plugin are now licensed
+  under Apache 2.0 (was MIT), with a NOTICE file. The hosted backend, Behaviour probes
+  and private probe assets remain proprietary and are not part of this repository.
+- README: a clearer quick start, demos, a contributing guide and a link to
+  proprioceptiveai.com.
+- PyPI page: links to the website, the repository, issues and this changelog.
+
+### Fixed
+- Tests that need the optional deep-mode packages (torch, tokenizers) now skip when
+  those are not installed, so the publish workflow's test step passes in CI.
+
+### Note
+- 0.1.18 was tagged but never published to PyPI. Its changes (free Deluxe with no time
+  limit, and the D1-D6 fixes) reach PyPI in this release.
+
 ## [0.1.18] - 2026-11-20
 
 ### Changed

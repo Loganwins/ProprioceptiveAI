@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "proprioceptive-lens"
-version = "0.1.18"
+version = "0.1.19"
 description = "See inside your local model: live confidence, hesitations, long-term memory and internal-state behaviour for local LLMs."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -24,8 +24,10 @@ classifiers = [
 deep = ["torch>=2.1", "transformers>=4.43"]
 
 [project.urls]
-Homepage = "https://github.com/Loganwins/ProprioceptiveAI"
+Homepage = "https://proprioceptiveai.com"
+Repository = "https://github.com/Loganwins/ProprioceptiveAI"
 Issues = "https://github.com/Loganwins/ProprioceptiveAI/issues"
+Changelog = "https://github.com/Loganwins/ProprioceptiveAI/blob/main/CHANGELOG.md"
 
 [project.scripts]
 lens = "lens.__main__:main"
