@@ -1,7 +1,8 @@
 import threading
 import unittest
 from types import SimpleNamespace as NS
-import torch
+import pytest
+torch = pytest.importorskip("torch")  # optional deep-mode dependency
 from lens.hf import DeepModel
 from lens.server import LensApp, DEEP_PREFIX
 

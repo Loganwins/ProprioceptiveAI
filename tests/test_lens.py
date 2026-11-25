@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import tempfile
 import threading
@@ -9,6 +10,11 @@ from unittest.mock import patch
 from lens.memory import Memory
 from lens.ollama import token_event
 from lens.server import LensApp, serve
+
+# Optional deep-mode dependencies: CI installs only pytest and numpy, so these tests
+# run where torch/tokenizers are installed and are skipped elsewhere.
+HAS_TORCH = importlib.util.find_spec("torch") is not None
+HAS_TOKENIZERS = importlib.util.find_spec("tokenizers") is not None
 
 
 class MemoryTests(unittest.TestCase):
@@ -311,6 +317,7 @@ class DoubleCheckTest(unittest.TestCase):
         self.assertFalse(answers_agree("Lagos.", "The capital of Nigeria is Abuja."))
 
 
+@unittest.skipUnless(HAS_TORCH, "needs the optional deep-mode dependencies")
 class SteeringTest(unittest.TestCase):
     """The shipped steering hook adds amount * |h| * v on known tensors (no model download)."""
 
@@ -325,6 +332,7 @@ class SteeringTest(unittest.TestCase):
         self.assertTrue(torch.allclose(out, torch.tensor([[[2.5, 3.0, 4.0]]])))
 
 
+@unittest.skipUnless(HAS_TORCH, "needs the optional deep-mode dependencies")
 class SteerOnlySpaceTest(unittest.TestCase):
     """Language steering lives in its own scrambled space: the client uses the "s:<layer>" matrix and says so."""
 
@@ -439,6 +447,7 @@ class SpelledEndMarkerTest(unittest.TestCase):
         self.assertEqual("".join(m._piece(i) for i in range(3)), "a < b")
 
 
+@unittest.skipUnless(HAS_TOKENIZERS, "needs the optional deep-mode dependencies")
 class TokenizerRoundTripTest(unittest.TestCase):
     """A tokenizer that drops word spaces on decode is replaced by the fast one built from tokenizer.json."""
 
@@ -471,6 +480,7 @@ class TokenizerRoundTripTest(unittest.TestCase):
         self.assertEqual(tok.chat_template, "T")
 
 
+@unittest.skipUnless(HAS_TORCH, "needs the optional deep-mode dependencies")
 class ConcurrentStreamTest(unittest.TestCase):
     """Two streams at once must not share per-stream state; a per-call steering override must not touch shared state."""
 
