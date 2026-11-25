@@ -8,7 +8,7 @@ Versioning](https://semver.org/).
 
 ### Changed
 - **Apache License 2.0.** The Lens client and its Claude Code plugin are now licensed
-  under Apache 2.0 (was MIT), with a NOTICE file. The hosted backend, Behaviour probes
+  under Apache 2.0, with a NOTICE file. The hosted backend, Behaviour probes
   and private probe assets remain proprietary and are not part of this repository.
 - README: a clearer quick start, demos, a contributing guide and a link to
   proprioceptiveai.com.
